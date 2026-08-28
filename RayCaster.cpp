@@ -191,7 +191,7 @@ int iScrIndex = SRES_1024x768;
 int iFovIndex = PFOV_60;
 
 // Texture mapping
-bool bDoTexture = false;   // Is texture mapping active?
+bool bDoTexture = true;   // Is texture mapping active?
 unsigned char* walltex_imgdata = NULL;    // Pointer to the loaded wall texture image (raw data format)
 
 //|___________________
