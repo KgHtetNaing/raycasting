@@ -83,6 +83,10 @@ const int CELLH_MASK = ~63;
 const int SAFE_DIST_FROM_WALL = 4;            // Safe player's distance from walls
 // Too small distances may produce very large sliver scales
 
+// Insanity Mechanic
+float fInsanity = 100.0f;       // Starts at 100
+float fMaxInsanity = 100.0f;    // The maximum size of the bar
+
 // Game map: 0 = empty cell, >= 1 cell with textured walls
 const int aMap[CELLY][CELLX] =
 { {3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3},
@@ -109,8 +113,8 @@ const int aScrSize[SRES_NB][2] =               // Supported screen dimensions
 const int aFov[PFOV_NB] =               // Supported FOV (degrees)
 { 45,60,90 };
 
-const int TURN_ANGLE = 1;           // Angle for the left and right turns (degrees)
-const int FORWARD_TRAN = 10;           // Translation for the forward and backward movements (world units)
+const int TURN_ANGLE = 5;           // Angle for the left and right turns (degrees)
+const int FORWARD_TRAN = 25;           // Translation for the forward and backward movements (world units)
 
 // Colors defined using RGB tuples
 //                                    R    G    B  ; intensity values [0, 255]
@@ -205,7 +209,7 @@ void DisplayFunc();
 void KeyboardFunc(unsigned char key, int x, int y);
 void LoadPPM(const char* fname, unsigned int* w, unsigned int* h, unsigned char** data, const int mallocflag);
 void ReshapeFunc(int w, int h);
-
+void TimerFunc(int value);
 //|____________________________________________________________________
 //|
 //| Function: main
@@ -241,6 +245,10 @@ int main(int argc, char** argv)
     glutDisplayFunc(DisplayFunc);
     glutKeyboardFunc(KeyboardFunc);
     glutReshapeFunc(ReshapeFunc);
+
+
+    // Start the 1-second interval loop
+    glutTimerFunc(1000, TimerFunc, 0);
 
     // Starts GLUT event processing loop:
     glutMainLoop();
@@ -782,7 +790,45 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
         iRay++;
         if (iRay == ANGLE360)
             iRay = ANGLE0;
-    }
+ }
+
+ // --- POST-PROCESSING: Hallucination Effect ---
+ if (fInsanity < 40.0f) {
+     // Iterate through the entire pixel matrix
+     for (int y = 0; y < SCREENY; y++) {
+         for (int x = 0; x < SCREENX; x++) {
+             int index = ((y * SCREENX) + x) * 3;
+
+             // Effect 1: Boost the Red Channel for a danger tint
+             int red = pFrameBuffer[index];
+             pFrameBuffer[index] = (red + 70 > 255) ? 255 : red + 70;
+
+             // Effect 2: Darken every 4th line for a glitchy scanline look
+             if (y % 4 == 0) {
+                 pFrameBuffer[index] /= 2; // R
+                 pFrameBuffer[index + 1] /= 2; // G
+                 pFrameBuffer[index + 2] /= 2; // B
+             }
+         }
+     }
+ } 
+
+
+ // --- HUD: Draw the Insanity Bar ---
+ int barMaxWidth = SCREENX;
+ int barWidth = (int)((fInsanity / fMaxInsanity) * barMaxWidth);
+ int barHeight = 20;
+ int startX = 0; // Padding from the left edge
+ int startY = SCREENY - 40; // Padding from the top (Y is bottom-up)
+
+ for (int y = startY; y < startY + barHeight; y++) {
+     for (int x = startX; x < startX + barWidth; x++) {
+         // Draw pure green directly into the framebuffer
+         pFrameBuffer[(((y * SCREENX) + x) * 3)] = 0;   // R
+         pFrameBuffer[(((y * SCREENX) + x) * 3) + 1] = 255; // G
+         pFrameBuffer[(((y * SCREENX) + x) * 3) + 2] = 0;   // B
+     }
+ }
 
 #ifdef SHOW_DEBUG_INFO
     for (int x = 0; x < SCREENX; x++) {
@@ -1259,4 +1305,19 @@ void ReshapeFunc(int w, int h)
     // Tracks the current window dimensions
     printf("DEBUG: Current window dimensions are %d x %d\n", w, h);
 #endif
+}
+
+void TimerFunc(int value)
+{
+    // Drain the sanity bar
+    if (fInsanity > 0) {
+        fInsanity -= 1.0f; // Amount to decrease every second
+    }
+
+    // Redraw the screen to reflect the updated bar, even if standing still
+    RayCaster((int)dXp, (int)dYp, iAngle);
+    glutPostRedisplay();
+
+    // Call this timer again in 1000 milliseconds (1 second)
+    glutTimerFunc(1000, TimerFunc, 0);
 }
