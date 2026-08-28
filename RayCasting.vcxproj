@@ -77,12 +77,12 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\asus laptop\Desktop\raycasting\freeglut-MSVC-3.0.0-2.mp\freeglut\include ; C:\Users\asus laptop\Desktop\raycasting\gmtl-0.6.1\gmtl-0.6.1</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Libraries\freeglut\include;C:\Libraries\gmtl-0.6.1</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Users\asus laptop\Desktop\raycasting\freeglut-MSVC-3.0.0-2.mp\freeglut\lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Libraries\freeglut\lib</AdditionalLibraryDirectories>
     </Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>

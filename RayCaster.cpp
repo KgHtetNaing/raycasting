@@ -122,6 +122,8 @@ const unsigned char WHITE[3] = { 255, 255, 255 };
 const unsigned char GREEN[3] = { 0, 255,   0 };
 const unsigned char BLUE[3] = { 0,   0, 255 };
 const unsigned char GRAY[3] = { 128, 128, 128 };
+const unsigned char DYELLOW[3] = { 150, 142, 59 };     // Dark Yellow
+const unsigned char YELLOW[3] = { 182, 180, 97 };      // Yellow
 const unsigned char DGRAY[3] = { 64,  64,  64 };      // Dark gray
 
 // Wall textures
@@ -731,8 +733,8 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
             }
 
             // Paints the ceiling and floor above and below the sliver, respectively
-            DrawSolidSliver(iCol, SCRY_1, iTop + 1, DGRAY[0], DGRAY[1], DGRAY[2]);    // Ceiling
-            DrawSolidSliver(iCol, iBottom - 1, 0, GRAY[0], GRAY[1], GRAY[2]);    // Floor
+            DrawSolidSliver(iCol, SCRY_1, iTop + 1, YELLOW[0], YELLOW[1], YELLOW[2]);    // Ceiling
+            DrawSolidSliver(iCol, iBottom - 1, 0, DYELLOW[0], DYELLOW[1], DYELLOW[2]);    // Floor
         }
         else {
             //|_________________________________________________
@@ -778,8 +780,8 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
             }
 
             // Paints the ceiling and floor above and below the sliver, respectively
-            DrawSolidSliver(iCol, SCRY_1, iTop + 1, DGRAY[0], DGRAY[1], DGRAY[2]);    // Ceiling
-            DrawSolidSliver(iCol, iBottom - 1, 0, GRAY[0], GRAY[1], GRAY[2]);    // Floor
+            DrawSolidSliver(iCol, SCRY_1, iTop + 1, YELLOW[0], YELLOW[1], YELLOW[2]);    // Ceiling
+            DrawSolidSliver(iCol, iBottom - 1, 0, DYELLOW[0], DYELLOW[1], DYELLOW[2]);    // Floor
         }
 
         //|_________________________________________________
