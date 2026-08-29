@@ -194,6 +194,28 @@ int iFovIndex = PFOV_60;
 bool bDoTexture = true;   // Is texture mapping active?
 unsigned char* walltex_imgdata = NULL;    // Pointer to the loaded wall texture image (raw data format)
 
+// Ceiling Lights
+struct PointLight {
+    double x, y;
+};
+const PointLight g_Lights[] = {
+    { 2 * CELL_WIDTH + 32.0, 3 * CELL_HEIGHT + 32.0 },
+    { 6 * CELL_WIDTH + 32.0, 3 * CELL_HEIGHT + 32.0 },
+    { 10 * CELL_WIDTH + 32.0, 3 * CELL_HEIGHT + 32.0 },
+    { 14 * CELL_WIDTH + 32.0, 3 * CELL_HEIGHT + 32.0 },
+    
+    { 2 * CELL_WIDTH + 32.0, 7 * CELL_HEIGHT + 32.0 },
+    { 6 * CELL_WIDTH + 32.0, 7 * CELL_HEIGHT + 32.0 },
+    { 10 * CELL_WIDTH + 32.0, 7 * CELL_HEIGHT + 32.0 },
+    { 14 * CELL_WIDTH + 32.0, 7 * CELL_HEIGHT + 32.0 },
+
+    { 2 * CELL_WIDTH + 32.0, 11 * CELL_HEIGHT + 32.0 },
+    { 6 * CELL_WIDTH + 32.0, 11 * CELL_HEIGHT + 32.0 },
+    { 10 * CELL_WIDTH + 32.0, 11 * CELL_HEIGHT + 32.0 },
+    { 14 * CELL_WIDTH + 32.0, 11 * CELL_HEIGHT + 32.0 }
+};
+const int g_NumLights = sizeof(g_Lights) / sizeof(g_Lights[0]);
+
 //|___________________
 //|
 //| Function Prototypes
@@ -205,13 +227,17 @@ void SetFrameBuffer(const int iScrX, const int iScrY);
 void Error(const char* szMsg);
 void RayCaster(const int iXp, const int iYp, const int iAngle);
 void DrawSolidSliver(const int x, const int yt, const int yb,
-    const unsigned char r, const unsigned char g, const unsigned char b);
-void DrawTexturedSliver(const int x, const int yt, const int yb, const int tid, const int tc);
+    const unsigned char r, const unsigned char g, const unsigned char b, double intensity);
+void DrawTexturedSliver(const int x, const int yt, const int yb, const int tid, const int tc, double intensity);
 void DisplayFunc();
 void KeyboardFunc(unsigned char key, int x, int y);
 void LoadPPM(const char* fname, unsigned int* w, unsigned int* h, unsigned char** data, const int mallocflag);
 void ReshapeFunc(int w, int h);
 void TimerFunc(int value);
+double CalcLightIntensity(double worldX, double worldY);
+bool IsLight(int cx, int cy);
+void DrawCeilingSliver(const int x, const int yt, const int yb, const int iRayID, const int iRay);
+void DrawFloorSliver(const int x, const int yt, const int yb, const int iRayID, const int iRay);
 //|____________________________________________________________________
 //|
 //| Function: main
@@ -697,44 +723,33 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
 
             // Find sliver height
             dScale = aRectify[iRayID] / ((1e-10) + dYDist);
-            iBottom = (int)(SCR_CENTERY - (dScale / 2));          // Framebuffer is bottom up (bottom Y = 0)
+            iBottom = (int)(SCR_CENTERY - (dScale / 2));
             iTop = (int)(SCR_CENTERY + (dScale / 2));
 
-            // Safety check: Too small distances may produce extremely large scales
-            // Clip to screen boundary
-            if ((iBottom < 0) || (iBottom > SCRY_1)) {
-                // iBottom > SCRY_1 indicates extremely large scales causing the sign to flip (- to +)
-                // So set iBottom to a reasonable value
-                iBottom = 0;
-            }
-            if ((iTop > SCRY_1) || (iTop < 0)) {
-                // iTop < 0 indicates extremely large scales causing the sign to flip (+ to -)
-                // So set iTop to a reasonable value
-                iTop = SCRY_1;
-            }
+            if ((iBottom < 0) || (iBottom > SCRY_1)) iBottom = 0;
+            if ((iTop > SCRY_1) || (iTop < 0)) iTop = SCRY_1;
 
-            // Ray casting is done from right to left of the screen
             iCol = SCRX_1 - iRayID;
+
+            // Step 4: Calculate light intensity at the wall intersection
+            double intensity = CalcLightIntensity((double)iXBound, dY);
 
             // Draws the sliver 
             if (bDoTexture) {
-                // With texture mapping
-                // TODO: ((int)dY & CELLH_MOD)
-                DrawTexturedSliver(iCol, iTop, iBottom, iCellTypeY - 1, ((int)dY) % CELL_HEIGHT);
+                DrawTexturedSliver(iCol, iTop, iBottom, iCellTypeY - 1, ((int)dY) % CELL_HEIGHT, intensity);
             }
             else {
-                // No texture mapping, draws a solid color
                 if (((int)dY) % CELL_HEIGHT == 0) {
-                    DrawSolidSliver(iCol, iTop, iBottom, WHITE[0], WHITE[1], WHITE[2]);
+                    DrawSolidSliver(iCol, iTop, iBottom, WHITE[0], WHITE[1], WHITE[2], intensity);
                 }
                 else {
-                    DrawSolidSliver(iCol, iTop, iBottom, BLUE[0], BLUE[1], BLUE[2]);
+                    DrawSolidSliver(iCol, iTop, iBottom, BLUE[0], BLUE[1], BLUE[2], intensity);
                 }
             }
 
-            // Paints the ceiling and floor above and below the sliver, respectively
-            DrawSolidSliver(iCol, SCRY_1, iTop + 1, YELLOW[0], YELLOW[1], YELLOW[2]);    // Ceiling
-            DrawSolidSliver(iCol, iBottom - 1, 0, DYELLOW[0], DYELLOW[1], DYELLOW[2]);    // Floor
+            // Step 5: Paint the ceiling and floor with dynamic ambient bleed and lights
+            DrawCeilingSliver(iCol, SCRY_1, iTop + 1, iRayID, iRay);
+            DrawFloorSliver(iCol, iBottom - 1, 0, iRayID, iRay);
         }
         else {
             //|_________________________________________________
@@ -744,44 +759,33 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
 
             // Find sliver height
             dScale = aRectify[iRayID] / ((1e-10) + dXDist);
-            iBottom = (int)(SCR_CENTERY - (dScale / 2));            // Framebuffer is bottom up (bottom Y = 0)
+            iBottom = (int)(SCR_CENTERY - (dScale / 2));
             iTop = (int)(SCR_CENTERY + (dScale / 2));
 
-            // Safety check: Too small distances may produce extremely large scales
-            // Clip to screen boundary
-            if ((iBottom < 0) || (iBottom > SCRY_1)) {
-                // iBottom > SCRY_1 indicates extremely large scales causing the sign to flip (- to +)
-                // So set iBottom to a reasonable value
-                iBottom = 0;
-            }
-            if ((iTop > SCRY_1) || (iTop < 0)) {
-                // iTop < 0 indicates extremely large scales causing the sign to flip (+ to -)
-                // So set iTop to a reasonable value
-                iTop = SCRY_1;
-            }
+            if ((iBottom < 0) || (iBottom > SCRY_1)) iBottom = 0;
+            if ((iTop > SCRY_1) || (iTop < 0)) iTop = SCRY_1;
 
-            // Ray casting is done from right to left of the screen
             iCol = SCRX_1 - iRayID;
+
+            // Step 4: Calculate light intensity at the wall intersection
+            double intensity = CalcLightIntensity(dX, (double)iYBound);
 
             // Draws the sliver
             if (bDoTexture) {
-                // With texture mapping
-                // TODO: ((int)dX & CELLW_MOD)
-                DrawTexturedSliver(iCol, iTop, iBottom, iCellTypeX - 1, ((int)dX) % CELL_WIDTH);
+                DrawTexturedSliver(iCol, iTop, iBottom, iCellTypeX - 1, ((int)dX) % CELL_WIDTH, intensity);
             }
             else {
-                // No texture mapping, draws a solid color
-                if (((int)dX) % CELL_WIDTH == 0) { // TODO: if (((int)dX & CELLW_MOD) == 0)
-                    DrawSolidSliver(iCol, iTop, iBottom, WHITE[0], WHITE[1], WHITE[2]);
+                if (((int)dX) % CELL_WIDTH == 0) {
+                    DrawSolidSliver(iCol, iTop, iBottom, WHITE[0], WHITE[1], WHITE[2], intensity);
                 }
                 else {
-                    DrawSolidSliver(iCol, iTop, iBottom, GREEN[0], GREEN[1], GREEN[2]);
+                    DrawSolidSliver(iCol, iTop, iBottom, GREEN[0], GREEN[1], GREEN[2], intensity);
                 }
             }
 
-            // Paints the ceiling and floor above and below the sliver, respectively
-            DrawSolidSliver(iCol, SCRY_1, iTop + 1, YELLOW[0], YELLOW[1], YELLOW[2]);    // Ceiling
-            DrawSolidSliver(iCol, iBottom - 1, 0, DYELLOW[0], DYELLOW[1], DYELLOW[2]);    // Floor
+            // Step 5: Paint the ceiling and floor with dynamic ambient bleed and lights
+            DrawCeilingSliver(iCol, SCRY_1, iTop + 1, iRayID, iRay);
+            DrawFloorSliver(iCol, iBottom - 1, 0, iRayID, iRay);
         }
 
         //|_________________________________________________
@@ -870,7 +874,7 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
 //|____________________________________________________________________
 
 void DrawSolidSliver(const int x, const int yt, const int yb,
-    const unsigned char r, const unsigned char g, const unsigned char b)
+    const unsigned char r, const unsigned char g, const unsigned char b, double intensity)
 {
     if (yt < yb) return;      // Safety check
 
@@ -878,9 +882,9 @@ void DrawSolidSliver(const int x, const int yt, const int yb,
 
     // Draws from bottom to top pixel
     for (y = yb; y <= yt; y++) {
-        pFrameBuffer[(((y * SCREENX) + x) * 3)] = r;
-        pFrameBuffer[(((y * SCREENX) + x) * 3) + 1] = g;
-        pFrameBuffer[(((y * SCREENX) + x) * 3) + 2] = b;
+        pFrameBuffer[(((y * SCREENX) + x) * 3)] = (unsigned char)(r * intensity);
+        pFrameBuffer[(((y * SCREENX) + x) * 3) + 1] = (unsigned char)(g * intensity);
+        pFrameBuffer[(((y * SCREENX) + x) * 3) + 2] = (unsigned char)(b * intensity);
     }
 }
 
@@ -903,7 +907,7 @@ void DrawSolidSliver(const int x, const int yt, const int yb,
 //| TODO: Support larger textures
 //|____________________________________________________________________
 
-void DrawTexturedSliver(const int x, const int yt, const int yb, const int tid, const int tc)
+void DrawTexturedSliver(const int x, const int yt, const int yb, const int tid, const int tc, double intensity)
 {
     if (yt < yb) return;                                  // Safety check
 
@@ -916,13 +920,12 @@ void DrawTexturedSliver(const int x, const int yt, const int yb, const int tid, 
     // Draws from top to bottom pixel
     for (y = yt; y >= yb; y--) {
         // Calculates image data offset
-        // TODO: OPTIMIZE -- It is a bit messy here
         c = walltex_imgdata + ((tid * WALLTEX_WIDTH) + tc + ((int)tx_y * WALLTEX_IMGWIDTH)) * 3;
 
         // Plots texel
-        pFrameBuffer[(((y * SCREENX) + x) * 3)] = *c;
-        pFrameBuffer[(((y * SCREENX) + x) * 3) + 1] = *(c + 1);
-        pFrameBuffer[(((y * SCREENX) + x) * 3) + 2] = *(c + 2);
+        pFrameBuffer[(((y * SCREENX) + x) * 3)] = (unsigned char)(*c * intensity);
+        pFrameBuffer[(((y * SCREENX) + x) * 3) + 1] = (unsigned char)(*(c + 1) * intensity);
+        pFrameBuffer[(((y * SCREENX) + x) * 3) + 2] = (unsigned char)(*(c + 2) * intensity);
 
         // Updates texel y
         tx_y += tx_step;
@@ -1322,4 +1325,97 @@ void TimerFunc(int value)
 
     // Call this timer again in 1000 milliseconds (1 second)
     glutTimerFunc(1000, TimerFunc, 0);
+}
+
+bool IsLight(int cx, int cy) {
+    for (int i = 0; i < g_NumLights; i++) {
+        if ((int)(g_Lights[i].x / CELL_WIDTH) == cx && (int)(g_Lights[i].y / CELL_HEIGHT) == cy) {
+            return true;
+        }
+    }
+    return false;
+}
+
+double CalcLightIntensity(double worldX, double worldY)
+{
+    double totalIntensity = 0.1; // Ambient light (minimum brightness)
+
+    for (int i = 0; i < g_NumLights; i++) {
+        double dx = worldX - g_Lights[i].x;
+        double dy = worldY - g_Lights[i].y;
+        double distSq = dx * dx + dy * dy;
+
+        if (distSq < 15000.0) { // Check radius optimization
+            // Inverse-square falloff with a tunable radius
+            double intensity = 1.0 / (1.0 + distSq / 3000.0);
+            totalIntensity += intensity;
+        }
+    }
+
+    if (totalIntensity > 1.0) totalIntensity = 1.0;
+    return totalIntensity;
+}
+
+void DrawCeilingSliver(const int x, const int yt, const int yb, const int iRayID, const int iRay)
+{
+    if (yt < yb) return;
+
+    for (int y = yb; y <= yt; y++) {
+        int screenY = y - SCR_CENTERY;
+        if (screenY <= 0) continue; 
+
+        double D = aRectify[iRayID] / (2.0 * screenY);
+        double worldX = dXp + D * aCos[iRay];
+        double worldY = dYp + D * aSin[iRay];
+
+        int cellX = (int)(worldX / CELL_WIDTH);
+        int cellY = (int)(worldY / CELL_HEIGHT);
+
+        double intensity = CalcLightIntensity(worldX, worldY);
+
+        unsigned char r = YELLOW[0];
+        unsigned char g = YELLOW[1];
+        unsigned char b = YELLOW[2];
+
+        if (IsLight(cellX, cellY)) {
+            double localX = worldX - cellX * CELL_WIDTH;
+            double localY = worldY - cellY * CELL_HEIGHT;
+            
+            // Draw a rectangular light in the center of the ceiling
+            if (localX > 20 && localX < 44 && localY > 20 && localY < 44) {
+                r = 255;
+                g = 255;
+                b = 255;
+                intensity = 1.0; 
+            }
+        }
+
+        pFrameBuffer[(((y * SCREENX) + x) * 3)] = (unsigned char)(r * intensity);
+        pFrameBuffer[(((y * SCREENX) + x) * 3) + 1] = (unsigned char)(g * intensity);
+        pFrameBuffer[(((y * SCREENX) + x) * 3) + 2] = (unsigned char)(b * intensity);
+    }
+}
+
+void DrawFloorSliver(const int x, const int yt, const int yb, const int iRayID, const int iRay)
+{
+    if (yt < yb) return;
+
+    for (int y = yb; y <= yt; y++) {
+        int screenY = SCR_CENTERY - y;
+        if (screenY <= 0) continue; 
+
+        double D = aRectify[iRayID] / (2.0 * screenY);
+        double worldX = dXp + D * aCos[iRay];
+        double worldY = dYp + D * aSin[iRay];
+
+        double intensity = CalcLightIntensity(worldX, worldY);
+
+        unsigned char r = DYELLOW[0];
+        unsigned char g = DYELLOW[1];
+        unsigned char b = DYELLOW[2];
+
+        pFrameBuffer[(((y * SCREENX) + x) * 3)] = (unsigned char)(r * intensity);
+        pFrameBuffer[(((y * SCREENX) + x) * 3) + 1] = (unsigned char)(g * intensity);
+        pFrameBuffer[(((y * SCREENX) + x) * 3) + 2] = (unsigned char)(b * intensity);
+    }
 }
