@@ -233,6 +233,18 @@ struct Sprite {
 // Create our Almond Water item (placed at specific world coordinates)
 Sprite almondWater = { (6 * CELL_WIDTH) + 32.0, (10 * CELL_HEIGHT) + 32.0, true };
 
+// Monster States & Structure
+enum MonsterState { LURK, STALK, CHASE, VANISH };
+
+struct Monster {
+    double x, y;
+    bool active;
+    MonsterState state;
+};
+
+// Monster instance (initial coordinates will be overwritten in InitProgram)
+Monster stalker = { 0.0, 0.0, true, LURK };
+
 //|               End of recalculated variables                       |
 //|___________________________________________________________________|
 
@@ -303,6 +315,8 @@ void DrawCeilingSliver(const int x, const int yt, const int yb, const int iRayID
 void DrawFloorSliver(const int x, const int yt, const int yb, const int iRayID, const int iRay);
 void DrawSprite(Sprite& sprite);
 void DrawTexturedSpriteSliver(const int x, const int yt, const int yb, const int texCol, unsigned char* imgdata, int imgW, int imgH, double intensity);
+
+void DrawMonster(Monster& m);
 //|____________________________________________________________________
 //|
 //| Function: main
@@ -341,7 +355,7 @@ int main(int argc, char** argv)
 
 
     // Start the 1-second interval loop
-    glutTimerFunc(1000, TimerFunc, 0);
+    glutTimerFunc(50, TimerFunc, 0);
 
     // Starts GLUT event processing loop:
     glutMainLoop();
@@ -378,15 +392,20 @@ void InitProgram()
     if (selectedMap == 0) {
         dXp = (2 * CELL_WIDTH) + 32;
         dYp = (4 * CELL_HEIGHT) + 32;
+        stalker.x = (14 * CELL_WIDTH) + 32.0;
+        stalker.y = (4 * CELL_HEIGHT) + 32.0;
     }
-
-    if (selectedMap == 1) {
+    else if (selectedMap == 1) {
         dXp = (14 * CELL_WIDTH) + 32;
         dYp = (1 * CELL_HEIGHT) + 32;
+        stalker.x = (10 * CELL_WIDTH) + 32.0;
+        stalker.y = (7 * CELL_HEIGHT) + 32.0;
     }
     else {
         dXp = (6 * CELL_WIDTH) + 32;
         dYp = (12 * CELL_HEIGHT) + 32;
+        stalker.x = (10 * CELL_WIDTH) + 32.0;
+        stalker.y = (2 * CELL_HEIGHT) + 32.0;
     }
     iAngle = ANGLE90;
 
@@ -686,6 +705,50 @@ void DrawSprite(Sprite& sprite)
                 if (texCol >= (int)aw_w) texCol = aw_w - 1;
 
                 DrawTexturedSpriteSliver(x, top, bottom, texCol, almondwater_imgdata, aw_w, aw_h, lightIntensity);
+            }
+        }
+    }
+}
+
+void DrawMonster(Monster& m)
+{
+    if (!m.active) return;
+
+    double dx = m.x - dXp;
+    double dy = m.y - dYp;
+    double dist = sqrt(dx * dx + dy * dy);
+
+    if (dist < 10.0) return;
+
+    double mAngleRad = atan2(dy, dx);
+    if (mAngleRad < 0) mAngleRad += 2 * PI;
+    int mAngleRay = (int)(mAngleRad / (2 * PI) * ANGLE360);
+
+    int angleDiff = mAngleRay - iAngle;
+    if (angleDiff < -ANGLE360 / 2) angleDiff += ANGLE360;
+    if (angleDiff > ANGLE360 / 2) angleDiff -= ANGLE360;
+
+    if (abs(angleDiff) > (FOVANGLE / 2) + 100) return;
+
+    int screenRayID = angleDiff + (FOVANGLE / 2);
+    int centerCol = SCRX_1 - screenRayID;
+
+    double scale = aSliverScale[iScrIndex] / dist;
+    int mSize = (int)scale;
+
+    int top = SCR_CENTERY + (mSize / 2);
+    int bottom = SCR_CENTERY - (mSize / 2);
+    if (bottom < 0) bottom = 0;
+    if (top > SCRY_1) top = SCRY_1;
+
+    int startX = centerCol - (mSize / 3);
+    int endX = centerCol + (mSize / 3);
+
+    for (int x = startX; x <= endX; x++) {
+        if (x >= 0 && x < SCREENX) {
+            if (dist < ZBuffer[x]) {
+                double light = CalcLightIntensity(m.x, m.y);
+                DrawSolidSliver(x, top, bottom, 180, 0, 0, light);
             }
         }
     }
@@ -1000,6 +1063,8 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
 
  // --- DRAW SPRITES ---
  DrawSprite(almondWater);
+ // --- DRAW MONSTER ---
+ DrawMonster(stalker);
 
  // --- POST-PROCESSING: Hallucination Effect ---
  if (fInsanity < 40.0f) {
@@ -1527,7 +1592,7 @@ void TimerFunc(int value)
     glutPostRedisplay();
 
     // Call this timer again in 1000 milliseconds (1 second)
-    glutTimerFunc(1000, TimerFunc, 0);
+    glutTimerFunc(50, TimerFunc, 0);
 
     // --- ALMOND WATER PICKUP LOGIC ---
     if (almondWater.active) {
@@ -1541,6 +1606,46 @@ void TimerFunc(int value)
             fInsanity += 30.0f;         // Heal sanity
             if (fInsanity > fMaxInsanity) fInsanity = fMaxInsanity;
             printf("Drank Almond Water! Sanity is now: %f\n", fInsanity);
+        }
+    }
+
+    // --- MONSTER AI & MOVEMENT ---
+    if (stalker.active) {
+        double dx = dXp - stalker.x;
+        double dy = dYp - stalker.y;
+        double dist = sqrt(dx * dx + dy * dy);
+
+        if (dist > 30.0) {
+            double moveSpeed = 2.0; // Smooth speed per tick
+            double dirX = dx / dist;
+            double dirY = dy / dist;
+
+            double nextX = stalker.x + (dirX * moveSpeed);
+            double nextY = stalker.y + (dirY * moveSpeed);
+
+            int gridX = ((int)nextX) / CELL_WIDTH;
+            int gridY = CALCY - (((int)nextY) / CELL_HEIGHT);
+
+            if (aMap[gridY][gridX] == CT_EMPTY || aMap[gridY][gridX] == 4 || aMap[gridY][gridX] == 5) {
+                stalker.x = nextX;
+                stalker.y = nextY;
+            }
+            else {
+                int currentGridX = ((int)stalker.x) / CELL_WIDTH;
+                int currentGridY = CALCY - (((int)stalker.y) / CELL_HEIGHT);
+
+                if (aMap[currentGridY][gridX] == CT_EMPTY) {
+                    stalker.x = nextX;
+                }
+                else if (aMap[gridY][currentGridX] == CT_EMPTY) {
+                    stalker.y = nextY;
+                }
+            }
+        }
+
+        // Sanity Drain Proximity Attack
+        if (dist < CELL_WIDTH * 2) {
+            fInsanity -= 0.5f;
         }
     }
 }
