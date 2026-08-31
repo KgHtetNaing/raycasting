@@ -221,6 +221,18 @@ double* aRectify = NULL;       // To rectify fishbowl distorsion
 // Frame buffer (colors are stored in R,G,B order)
 GLubyte* pFrameBuffer = NULL;
 
+// Z-Buffer for Sprite depth-checking
+double* ZBuffer = NULL;
+
+// Sprite Structure
+struct Sprite {
+    double x, y;
+    bool active;
+};
+
+// Create our Almond Water item (placed at specific world coordinates)
+Sprite almondWater = { (6 * CELL_WIDTH) + 32.0, (10 * CELL_HEIGHT) + 32.0, true };
+
 //|               End of recalculated variables                       |
 //|___________________________________________________________________|
 
@@ -239,6 +251,11 @@ int iFovIndex = PFOV_60;
 // Texture mapping
 bool bDoTexture = true;   // Is texture mapping active?
 unsigned char* walltex_imgdata = NULL;    // Pointer to the loaded wall texture image (raw data format)
+
+// Sprite Textures
+unsigned char* almondwater_imgdata = NULL;
+unsigned int aw_w = 0;
+unsigned int aw_h = 0;
 
 // Ceiling Lights
 struct PointLight {
@@ -284,6 +301,8 @@ double CalcLightIntensity(double worldX, double worldY);
 bool IsLight(int cx, int cy);
 void DrawCeilingSliver(const int x, const int yt, const int yb, const int iRayID, const int iRay);
 void DrawFloorSliver(const int x, const int yt, const int yb, const int iRayID, const int iRay);
+void DrawSprite(Sprite& sprite);
+void DrawTexturedSpriteSliver(const int x, const int yt, const int yb, const int texCol, unsigned char* imgdata, int imgW, int imgH, double intensity);
 //|____________________________________________________________________
 //|
 //| Function: main
@@ -379,6 +398,9 @@ void InitProgram()
     if ((w != WALLTEX_IMGWIDTH) || (h != WALLTEX_HEIGHT)) { // Dimensions check
         Error("InitProgram: Invalid texture image dimensions");
     }
+
+        // Load Almond Water sprite texture
+    LoadPPM("almondwater.ppm", &aw_w, &aw_h, &almondwater_imgdata, 1);
 }
 
 //|____________________________________________________________________
@@ -529,9 +551,13 @@ void SetFrameBuffer(const int iScrX, const int iScrY)
     if (pFrameBuffer) {
         free(pFrameBuffer);
     }
+    if (ZBuffer) {
+        free(ZBuffer);
+    }
 
     // 2. Allocates memory for the new framebuffer
     pFrameBuffer = (GLubyte*)malloc(FRAMEBUFFER_SIZE);
+    ZBuffer = (double*)malloc(iScrX * sizeof(double)); // 1D array matching screen width
     if (!pFrameBuffer) {
         // Not enough memory! abort
         Error("SetFrameBuffer: Not enough memory to allocate the framebuffer");
@@ -557,6 +583,112 @@ void Error(const char* szMsg)
     printf("Error: %s\n", szMsg);
     _getch();
     exit(1);
+}
+
+void DrawTexturedSpriteSliver(const int x, const int yt, const int yb, const int texCol, unsigned char* imgdata, int imgW, int imgH, double intensity)
+{
+    if (yt < yb) return;
+
+    int sliver_height = yt - yb + 1;
+    float tx_step = (float)imgH / sliver_height;
+    float tx_y = 0;
+
+    for (int y = yt; y >= yb; y--) {
+        int texY = (int)tx_y;
+        if (texY >= imgH) texY = imgH - 1; // Safety bounds
+
+        // Find the specific pixel in the image array
+        unsigned char* c = imgdata + ((texY * imgW) + texCol) * 3;
+
+        unsigned char r = *c;
+        unsigned char g = *(c + 1);
+        unsigned char b = *(c + 2);
+
+        // TRANSPARENCY CHECK: 
+        // If the background of your converted PPM is pure white, this skips drawing it.
+        // (If your converter made the background black, change this to r==0 && g==0 && b==0)
+        if (r == 255 && g == 255 && b == 255) {
+            tx_y += tx_step;
+            continue;
+        }
+
+        pFrameBuffer[(((y * SCREENX) + x) * 3)] = (unsigned char)(r * intensity);
+        pFrameBuffer[(((y * SCREENX) + x) * 3) + 1] = (unsigned char)(g * intensity);
+        pFrameBuffer[(((y * SCREENX) + x) * 3) + 2] = (unsigned char)(b * intensity);
+
+        tx_y += tx_step;
+    }
+}
+
+void DrawSprite(Sprite& sprite)
+{
+    if (!sprite.active) return;
+
+    // SAFETY CHECK: If the image failed to load, do not attempt to draw it!
+    if (almondwater_imgdata == NULL || aw_w == 0 || aw_h == 0) return;
+
+    // 1. Calculate distance from player to sprite
+    double dx = sprite.x - dXp;
+    double dy = sprite.y - dYp;
+    double dist = sqrt(dx * dx + dy * dy);
+
+    if (dist < 10.0) return; // Prevent division by zero if too close
+
+    // 2. Calculate the absolute angle to the sprite
+    double spriteAngleRad = atan2(dy, dx);
+    if (spriteAngleRad < 0) spriteAngleRad += 2 * PI;
+    int spriteAngleRay = (int)(spriteAngleRad / (2 * PI) * ANGLE360);
+
+    // 3. Find the difference between player angle and sprite angle
+    int angleDiff = spriteAngleRay - iAngle;
+
+    // Wrap around to keep the difference between -180 and +180 degrees
+    if (angleDiff < -ANGLE360 / 2) angleDiff += ANGLE360;
+    if (angleDiff > ANGLE360 / 2) angleDiff -= ANGLE360;
+
+    // 4. Check if the sprite is within our Field of View (FOV)
+    if (abs(angleDiff) > (FOVANGLE / 2) + 100) return; // +100 gives a buffer so the edges don't pop out
+
+    // 5. Map the angle difference to a screen X pixel
+    int screenRayID = angleDiff + (FOVANGLE / 2);
+    int centerCol = SCRX_1 - screenRayID;
+
+    // 6. Calculate how large to draw the sprite based on distance
+    double scale = aSliverScale[iScrIndex] / dist;
+    int spriteSize = (int)scale;
+
+    // Position it vertically so it looks like it is resting on the floor
+    int top = SCR_CENTERY + (spriteSize / 2);
+    int bottom = SCR_CENTERY - (spriteSize / 2);
+
+    int floorOffset = spriteSize / 3; // Push it down towards the floor
+    top -= floorOffset;
+    bottom -= floorOffset;
+
+    if (bottom < 0) bottom = 0;
+    if (top > SCRY_1) top = SCRY_1;
+
+    // 7. Render the vertical slivers of the sprite
+    int startX = centerCol - (spriteSize / 4); // Divide by 4 makes it narrower like a bottle
+    int endX = centerCol + (spriteSize / 4);
+
+    int spriteWidth = endX - startX;
+    if (spriteWidth <= 0) spriteWidth = 1; // Prevent division by zero
+
+    for (int x = startX; x <= endX; x++) {
+        if (x >= 0 && x < SCREENX) {
+            // Z-BUFFER CHECK: Only draw if the sprite is closer than the wall at this pixel!
+            if (dist < ZBuffer[x]) {
+                double lightIntensity = CalcLightIntensity(sprite.x, sprite.y);
+
+                // Calculate which vertical column of the texture to sample
+                int texCol = (int)(((float)(x - startX) / spriteWidth) * aw_w);
+                if (texCol >= (int)aw_w) texCol = aw_w - 1;
+
+                DrawTexturedSpriteSliver(x, top, bottom, texCol, almondwater_imgdata, aw_w, aw_h, lightIntensity);
+            }
+        }
+    }
 }
 
 //|____________________________________________________________________
@@ -795,6 +927,8 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
 
             iCol = SCRX_1 - iRayID;
 
+            ZBuffer[iCol] = dYDist; // Record the depth of this vertical slice
+
             // Step 4: Calculate light intensity at the wall intersection
             double intensity = CalcLightIntensity((double)iXBound, dY);
 
@@ -831,6 +965,8 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
 
             iCol = SCRX_1 - iRayID;
 
+            ZBuffer[iCol] = dXDist; // Record the depth of this vertical slice
+
             // Step 4: Calculate light intensity at the wall intersection
             double intensity = CalcLightIntensity(dX, (double)iYBound);
 
@@ -861,6 +997,9 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
         if (iRay == ANGLE360)
             iRay = ANGLE0;
  }
+
+ // --- DRAW SPRITES ---
+ DrawSprite(almondWater);
 
  // --- POST-PROCESSING: Hallucination Effect ---
  if (fInsanity < 40.0f) {
@@ -1389,6 +1528,21 @@ void TimerFunc(int value)
 
     // Call this timer again in 1000 milliseconds (1 second)
     glutTimerFunc(1000, TimerFunc, 0);
+
+    // --- ALMOND WATER PICKUP LOGIC ---
+    if (almondWater.active) {
+        double dx = almondWater.x - dXp;
+        double dy = almondWater.y - dYp;
+        double dist = sqrt(dx * dx + dy * dy);
+
+        // If the player gets close enough (collision radius)
+        if (dist < CELL_WIDTH / 2.0) {
+            almondWater.active = false; // Make it disappear
+            fInsanity += 30.0f;         // Heal sanity
+            if (fInsanity > fMaxInsanity) fInsanity = fMaxInsanity;
+            printf("Drank Almond Water! Sanity is now: %f\n", fInsanity);
+        }
+    }
 }
 
 bool IsLight(int cx, int cy) {
