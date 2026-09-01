@@ -1606,44 +1606,117 @@ void TimerFunc(int value)
 
     // --- MONSTER AI & MOVEMENT ---
     if (stalker.active) {
-        double dx = dXp - stalker.x;
-        double dy = dYp - stalker.y;
-        double dist = sqrt(dx * dx + dy * dy);
+        // 1. Convert player and monster positions to grid coordinates
+        int pGridX = (int)(dXp / CELL_WIDTH);
+        int pGridY = CALCY - (int)(dYp / CELL_HEIGHT);
 
-        if (dist > 30.0) {
-            double moveSpeed = 2.5; // Smooth speed per tick
-            double dirX = dx / dist;
-            double dirY = dy / dist;
+        int mGridX = (int)(stalker.x / CELL_WIDTH);
+        int mGridY = CALCY - (int)(stalker.y / CELL_HEIGHT);
 
-            double nextX = stalker.x + (dirX * moveSpeed);
-            double nextY = stalker.y + (dirY * moveSpeed);
+        double targetX = dXp;
+        double targetY = dYp;
 
-            int gridX = ((int)nextX) / CELL_WIDTH;
-            int gridY = CALCY - (((int)nextY) / CELL_HEIGHT);
+        // 2. If we are far apart or in different cells, use BFS to find the next optimal step
+        if (mGridX != pGridX || mGridY != pGridY) {
+            bool visited[CELLY][CELLX] = { false };
+            struct Node {
+                int x, y;
+                int firstX, firstY;
+            };
 
-            if (gridX >= 0 && gridX < CELLX && gridY >= 0 && gridY < CELLY) {
-                if (aMap[gridY][gridX] == CT_EMPTY || aMap[gridY][gridX] == 4 || aMap[gridY][gridX] == 5) {
-                    stalker.x = nextX;
-                    stalker.y = nextY;
-                }
-                else {
-                    // Smooth wall-sliding fallback
-                    int currentGridX = ((int)stalker.x) / CELL_WIDTH;
-                    int currentGridY = CALCY - (((int)stalker.y) / CELL_HEIGHT);
+            Node queue[CELLY * CELLX];
+            int head = 0, tail = 0;
 
-                    if (aMap[currentGridY][gridX] == CT_EMPTY) {
-                        stalker.x = nextX; // Slide along X
-                    }
-                    else if (aMap[gridY][currentGridX] == CT_EMPTY) {
-                        stalker.y = nextY; // Slide along Y
+            visited[mGridY][mGridX] = true;
+
+            int dX[] = { 0, 0, -1, 1 };
+            int dY[] = { -1, 1, 0, 0 };
+
+            for (int i = 0; i < 4; i++) {
+                int nextX = mGridX + dX[i];
+                int nextY = mGridY + dY[i];
+
+                if (nextX >= 0 && nextX < CELLX && nextY >= 0 && nextY < CELLY) {
+                    if (aMap[nextY][nextX] == CT_EMPTY || aMap[nextY][nextX] == 4 || aMap[nextY][nextX] == 5) {
+                        visited[nextY][nextX] = true;
+                        queue[tail++] = { nextX, nextY, nextX, nextY };
                     }
                 }
             }
+
+            int targetStepX = mGridX;
+            int targetStepY = mGridY;
+            bool foundPath = false;
+
+            while (head < tail) {
+                Node current = queue[head++];
+
+                if (current.x == pGridX && current.y == pGridY) {
+                    targetStepX = current.firstX;
+                    targetStepY = current.firstY;
+                    foundPath = true;
+                    break;
+                }
+
+                for (int i = 0; i < 4; i++) {
+                    int nextX = current.x + dX[i];
+                    int nextY = current.y + dY[i];
+
+                    if (nextX >= 0 && nextX < CELLX && nextY >= 0 && nextY < CELLY) {
+                        if (!visited[nextY][nextX] && (aMap[nextY][nextX] == CT_EMPTY || aMap[nextY][nextX] == 4 || aMap[nextY][nextX] == 5)) {
+                            visited[nextY][nextX] = true;
+                            queue[tail++] = { nextX, nextY, current.firstX, current.firstY };
+                        }
+                    }
+                }
+            }
+
+            // If a path was found, target the center of that next grid step
+            if (foundPath) {
+                targetX = (targetStepX * CELL_WIDTH) + 32.0;
+                targetY = ((CALCY - targetStepY) * CELL_HEIGHT) + 32.0;
+            }
         }
 
-        // Sanity Drain Proximity Attack
-        if (dist < CELL_WIDTH * 2) {
-            fInsanity -= 0.5f;
+        // 3. Smoothly glide toward the target coordinates
+        double dx = targetX - stalker.x;
+        double dy = targetY - stalker.y;
+        double dist = sqrt(dx * dx + dy * dy);
+
+        if (dist > 0.5) {
+            double moveSpeed = 2.0; // Adjust speed here if you want it faster/slower
+            stalker.x += (dx / dist) * moveSpeed;
+            stalker.y += (dy / dist) * moveSpeed;
+        }
+
+        // 4. --- TOUCH COLLISION & RANDOM CELL TELEPORTATION ---
+        double directDx = dXp - stalker.x;
+        double directDy = dYp - stalker.y;
+        double directDist = sqrt(directDx * directDx + directDy * directDy);
+
+        if (directDist < 35.0) { // Touch trigger
+            int randGridX, randGridY;
+            do {
+                randGridX = rand() % CELLX;
+                randGridY = rand() % CELLY;
+            } while (aMap[randGridY][randGridX] != CT_EMPTY);
+
+            dXp = (randGridX * CELL_WIDTH) + 32.0;
+            dYp = ((CALCY - randGridY) * CELL_HEIGHT) + 32.0;
+
+            int mRandGridX, mRandGridY;
+            do {
+                mRandGridX = rand() % CELLX;
+                mRandGridY = rand() % CELLY;
+            } while (aMap[mRandGridY][mRandGridX] != CT_EMPTY || (mRandGridX == randGridX && mRandGridY == randGridY));
+
+            stalker.x = (mRandGridX * CELL_WIDTH) + 32.0;
+            stalker.y = ((CALCY - mRandGridY) * CELL_HEIGHT) + 32.0;
+
+            fInsanity -= 25.0f;
+            if (fInsanity < 0.0f) fInsanity = 0.0f;
+
+            printf("CAUGHT! Warped to a random sector. Sanity damaged!\n");
         }
     }
     // Redraw the screen to reflect the updated bar, even if standing still
