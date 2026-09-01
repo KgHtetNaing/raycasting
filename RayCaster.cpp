@@ -1587,12 +1587,7 @@ void TimerFunc(int value)
         fInsanity -= 1.0f; // Amount to decrease every second
     }
 
-    // Redraw the screen to reflect the updated bar, even if standing still
-    RayCaster((int)dXp, (int)dYp, iAngle);
-    glutPostRedisplay();
-
-    // Call this timer again in 1000 milliseconds (1 second)
-    glutTimerFunc(50, TimerFunc, 0);
+ 
 
     // --- ALMOND WATER PICKUP LOGIC ---
     if (almondWater.active) {
@@ -1616,7 +1611,7 @@ void TimerFunc(int value)
         double dist = sqrt(dx * dx + dy * dy);
 
         if (dist > 30.0) {
-            double moveSpeed = 2.0; // Smooth speed per tick
+            double moveSpeed = 2.5; // Smooth speed per tick
             double dirX = dx / dist;
             double dirY = dy / dist;
 
@@ -1626,19 +1621,22 @@ void TimerFunc(int value)
             int gridX = ((int)nextX) / CELL_WIDTH;
             int gridY = CALCY - (((int)nextY) / CELL_HEIGHT);
 
-            if (aMap[gridY][gridX] == CT_EMPTY || aMap[gridY][gridX] == 4 || aMap[gridY][gridX] == 5) {
-                stalker.x = nextX;
-                stalker.y = nextY;
-            }
-            else {
-                int currentGridX = ((int)stalker.x) / CELL_WIDTH;
-                int currentGridY = CALCY - (((int)stalker.y) / CELL_HEIGHT);
-
-                if (aMap[currentGridY][gridX] == CT_EMPTY) {
+            if (gridX >= 0 && gridX < CELLX && gridY >= 0 && gridY < CELLY) {
+                if (aMap[gridY][gridX] == CT_EMPTY || aMap[gridY][gridX] == 4 || aMap[gridY][gridX] == 5) {
                     stalker.x = nextX;
-                }
-                else if (aMap[gridY][currentGridX] == CT_EMPTY) {
                     stalker.y = nextY;
+                }
+                else {
+                    // Smooth wall-sliding fallback
+                    int currentGridX = ((int)stalker.x) / CELL_WIDTH;
+                    int currentGridY = CALCY - (((int)stalker.y) / CELL_HEIGHT);
+
+                    if (aMap[currentGridY][gridX] == CT_EMPTY) {
+                        stalker.x = nextX; // Slide along X
+                    }
+                    else if (aMap[gridY][currentGridX] == CT_EMPTY) {
+                        stalker.y = nextY; // Slide along Y
+                    }
                 }
             }
         }
@@ -1648,6 +1646,12 @@ void TimerFunc(int value)
             fInsanity -= 0.5f;
         }
     }
+    // Redraw the screen to reflect the updated bar, even if standing still
+    RayCaster((int)dXp, (int)dYp, iAngle);
+    glutPostRedisplay();
+
+    // Call this timer again in 1000 milliseconds (1 second)
+    glutTimerFunc(50, TimerFunc, 0);
 }
 
 bool IsLight(int cx, int cy) {
