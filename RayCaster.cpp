@@ -197,6 +197,8 @@ int SCRY_1;
 int SCR_CENTERY;          // Y coordinate of the screen center 
 double DEG_PER_RAY;       // Angle between two adjacent rays (degrees)
 
+bool keys[256] = { false };
+
 // Converts degree angles to (1) ray IDs (0-based)
 // They can also be thought of as (2) # of rays in the angles
 const int ANGLE0 = 0;
@@ -306,6 +308,7 @@ void DrawSolidSliver(const int x, const int yt, const int yb,
 void DrawTexturedSliver(const int x, const int yt, const int yb, const int tid, const int tc, double intensity);
 void DisplayFunc();
 void KeyboardFunc(unsigned char key, int x, int y);
+void KeyboardUpFunc(unsigned char key, int x, int y);
 void LoadPPM(const char* fname, unsigned int* w, unsigned int* h, unsigned char** data, const int mallocflag);
 void ReshapeFunc(int w, int h);
 void TimerFunc(int value);
@@ -352,6 +355,7 @@ int main(int argc, char** argv)
     glutDisplayFunc(DisplayFunc);
     glutKeyboardFunc(KeyboardFunc);
     glutReshapeFunc(ReshapeFunc);
+    glutKeyboardUpFunc(KeyboardUpFunc);
 
 
     // Start the 1-second interval loop
@@ -1241,266 +1245,303 @@ void DisplayFunc()
 //| GLUT keyboard callback function called for every key press event.
 //|____________________________________________________________________
 
+//void KeyboardFunc(unsigned char key, int x, int y)
+//{
+//    bool   bTranslate = false;   // Is the player translated?
+//    bool   bChangeRes = false;   // Is resolution changed?
+//    bool   bChangeFOV = false;   // Is FOV changed?
+//    double dDeltaX, dDeltaY;     // Delta translation 
+//    double dOldAngle;            // Player's view direction in degrees (before recalculating ray casting parameters)
+//
+//    switch (key) {
+//        //|_________________________________________________
+//        //| 
+//        //| WASD for player's movement
+//        //|_________________________________________________
+//
+//    case 'a':               // Left turn
+//    case 'A':
+//        iAngle += ANGLETURN;
+//        if (iAngle >= ANGLE360)
+//            iAngle = iAngle - ANGLE360;
+//        break;
+//    case 'd':               // Right turn
+//    case 'D':
+//        iAngle -= ANGLETURN;
+//        if (iAngle < ANGLE0)
+//            iAngle = ANGLE360 + iAngle;
+//        break;
+//    case 'w':               // Forward translation
+//    case 'W':
+//        // Computes the delta translation
+//        dDeltaX = FORWARD_TRAN * aCos[iAngle];
+//        dDeltaY = FORWARD_TRAN * aSin[iAngle];
+//        bTranslate = true;
+//        break;
+//    case 's':               // Backward translation
+//    case 'S':
+//        // Computes the delta translation
+//        dDeltaX = -FORWARD_TRAN * aCos[iAngle];
+//        dDeltaY = -FORWARD_TRAN * aSin[iAngle];
+//        bTranslate = true;
+//        break;
+//
+//        //|_________________________________________________
+//        //| 
+//        //| Texture mapping
+//        //|_________________________________________________
+//    case 't':
+//    case 'T':
+//        bDoTexture = !bDoTexture;
+//        break;
+//
+//        //|_________________________________________________
+//        //| 
+//        //| Resolution and FOV changes
+//        //|_________________________________________________
+//    case '+':               // Increases resolution
+//    case '=':
+//        iScrIndex++;
+//        if (iScrIndex == SRES_NB) {
+//            iScrIndex = 0;
+//        }
+//        bChangeRes = true;
+//        break;
+//    case '-':               // Decreases resolution
+//    case '_':
+//        iScrIndex--;
+//        if (iScrIndex < 0) {
+//            iScrIndex = SRES_NB - 1;
+//        }
+//        bChangeRes = true;
+//        break;
+//    case ']':               // Increases FOV
+//    case '}':
+//        iFovIndex++;
+//        if (iFovIndex == PFOV_NB) {
+//            iFovIndex = 0;
+//        }
+//        bChangeFOV = true;
+//        break;
+//    case '[':               // Decreases FOV
+//    case '{':
+//        iFovIndex--;
+//        if (iFovIndex < 0) {
+//            iFovIndex = PFOV_NB - 1;
+//        }
+//        bChangeFOV = true;
+//        break;
+//
+//        // Otherwise, does nothing
+//    default:
+//        return;
+//    }
+//
+//    if (bChangeRes || bChangeFOV) {
+//        //|_________________________________________________
+//        //| 
+//        //| Recalculates ray casting parameters if resolution or FOV is changed
+//        //|_________________________________________________
+//        dOldAngle = iAngle * DEG_PER_RAY;               // Maps old ray ID to degrees
+//        CalcRCParams(aFov[iFovIndex], aScrSize[iScrIndex][0], aScrSize[iScrIndex][1], aSliverScale[iScrIndex]);
+//        iAngle = (int)(dOldAngle / DEG_PER_RAY);     // Maps degrees to new ray ID
+//
+//        if (bChangeRes) {
+//            // Destroys and reallocates framebuffer
+//            SetFrameBuffer(aScrSize[iScrIndex][0], aScrSize[iScrIndex][1]);
+//
+//            // Set window size to match the new resolution
+//            glutReshapeWindow(aScrSize[iScrIndex][0], aScrSize[iScrIndex][1]);
+//
+//            printf("Screen resolutions are %d x %d\n", aScrSize[iScrIndex][0], aScrSize[iScrIndex][1]);
+//        }
+//        else { // implied bChangeFOV
+//            printf("Player's FOV is %d\n", aFov[iFovIndex]);
+//        }
+//    }
+//
+//    if (bTranslate) {
+//#ifdef USE_ADVANCED_PLAYER_TRANSLATION
+//        //|_________________________________________________
+//        //| 
+//        //| Advanced movement mechanics: Player can slide along walls
+//        //|_________________________________________________
+//
+//        int iOldXp, iOldYp;       // The player's old position
+//        int iCp;                  // The player's current position (X or Y)
+//        int iCell;                // The next cell wrt player before translation (X or Y)
+//
+//        // Player's position before translation
+//        iOldXp = (int)dXp;
+//        iOldYp = (int)dYp;
+//
+//        if (dDeltaX > 0) {
+//            //|_________________________________________________
+//            //| 
+//            //| Move right
+//            //|_________________________________________________
+//
+//            iCell = (iOldXp / CELL_WIDTH) + 1;      // Cell on the right of player before translation
+//            // TODO: (iOldXp >> 6) + 1
+//            dXp += dDeltaX;                      // Player's position after translation      
+//            if (aMap[CALCY - (iOldYp / CELL_HEIGHT)][iCell] != CT_EMPTY) {
+//                // There is a wall (non-emptied cell) on the right
+//                // Make sure the player is within the safe distance from the wall after the translation
+//
+//                iCp = (int)dXp;                       // Position after the transation
+//                if ((iCp / CELL_WIDTH == iCell) ||
+//                    (iCp % CELL_WIDTH >= CELL_WIDTH - SAFE_DIST_FROM_WALL)) {
+//                    // TODO: iCp >> 6
+//                    // TODO: iCp & CELLW_MOD
+//                    // Player moves into non-emptied cell on the right, or
+//                    // Player crosses the safe distance from the wall
+//                    // Moves player to the safe distance
+//                    dXp = (iCell * CELL_WIDTH) - 1 - SAFE_DIST_FROM_WALL;
+//                } // else { The player is still within the safe distance after transation, so it is safe to move }
+//            } // else { There is an empty cell on the right, so it is safe to move }      
+//        }
+//        else
+//            if (dDeltaX < 0) {
+//                //|_________________________________________________
+//                //| 
+//                //| Move left
+//                //|_________________________________________________
+//
+//                iCell = (iOldXp / CELL_WIDTH) - 1;      // Cell on the left of player before translation
+//                // TODO: (iOldXp >> 6) - 1
+//                dXp += dDeltaX;                      // Player's position after translation      
+//                if (aMap[CALCY - (iOldYp / CELL_HEIGHT)][iCell] != CT_EMPTY) {
+//                    // There is a wall (non-emptied cell) on the left
+//                    // Make sure the player is within the safe distance from the wall after the translation
+//
+//                    iCp = (int)dXp;                       // Position after the transation
+//                    if ((iCp / CELL_WIDTH == iCell) ||
+//                        (iCp % CELL_WIDTH < SAFE_DIST_FROM_WALL)) {
+//                        // TODO: iCp >> 6
+//                        // TODO: iCp & CELLW_MOD
+//                        // Player moves into non-emptied cell on the left, or
+//                        // Player crosses the safe distance from the wall
+//                        // Moves player to the safe distance
+//                        dXp = ((iCell + 1) * CELL_WIDTH) + SAFE_DIST_FROM_WALL;
+//                    } // else { The player is still within the safe distance after transation, so it is safe to move }
+//                } // else { There is an empty cell on the left, so it is safe to move }      
+//            }
+//
+//        if (dDeltaY > 0) {
+//            //|_________________________________________________
+//            //| 
+//            //| Move up
+//            //|_________________________________________________
+//
+//            iCell = (iOldYp / CELL_HEIGHT) + 1;     // Cell above player before translation
+//            // TODO: (iOldYp >> 6) + 1
+//            dYp += dDeltaY;                      // Player's position after translation      
+//            if (aMap[CALCY - iCell][iOldXp / CELL_WIDTH] != CT_EMPTY) {
+//                // There is a wall (non-emptied cell) above
+//                // Make sure the player is within the safe distance from the wall after the translation
+//
+//                iCp = (int)dYp;                       // Position after the transation
+//                if ((iCp / CELL_HEIGHT == iCell) ||
+//                    (iCp % CELL_HEIGHT >= CELL_HEIGHT - SAFE_DIST_FROM_WALL)) {
+//                    // TODO: iCp >> 6
+//                    // TODO: iCp & CELLW_MOD
+//                    // Player moves into non-emptied cell above, or
+//                    // Player crosses the safe distance from the wall
+//                    // Moves player to the safe distance
+//                    dYp = (iCell * CELL_HEIGHT) - 1 - SAFE_DIST_FROM_WALL;
+//                } // else { The player is still within the safe distance after transation, so it is safe to move }
+//            } // else { There is an empty cell above, so it is safe to move }      
+//        }
+//        else
+//            if (dDeltaY < 0) {
+//                //|_________________________________________________
+//                //| 
+//                //| Move down
+//                //|_________________________________________________
+//
+//                iCell = (iOldYp / CELL_HEIGHT) - 1;     // Cell below player before translation
+//                // TODO: (iOldYp >> 6) - 1
+//                dYp += dDeltaY;                      // Player's position after translation      
+//                if (aMap[CALCY - iCell][iOldXp / CELL_WIDTH] != CT_EMPTY) {
+//                    // There is a wall (non-emptied cell) below
+//                    // Make sure the player is within the safe distance from the wall after the translation
+//
+//                    iCp = (int)dYp;                       // Position after the transation
+//                    if ((iCp / CELL_HEIGHT == iCell) ||
+//                        (iCp % CELL_HEIGHT < SAFE_DIST_FROM_WALL)) {
+//                        // TODO: iCp >> 6
+//                        // TODO: iCp & CELLW_MOD
+//                        // Player moves into non-emptied cell below, or
+//                        // Player crosses the safe distance from the wall
+//                        // Moves player to the safe distance
+//                        dYp = ((iCell + 1) * CELL_HEIGHT) + SAFE_DIST_FROM_WALL;
+//                    } // else { The player is still within the safe distance after transation, so it is safe to move }
+//                } // else { There is an empty cell below, so it is safe to move }      
+//            }
+//#else
+//        //|_________________________________________________
+//        //| 
+//        //| Simple movement mechanics: No sliding along walls
+//        //|_________________________________________________
+//
+//        double dOldXp, dOldYp;       // The player's old position
+//
+//        // Player's position before translation
+//        dOldXp = dXp;
+//        dOldYp = dYp;
+//
+//        // Computes the new position
+//        dXp += dDeltaX;
+//        dYp += dDeltaY;
+//
+//        if (aMap[CALCY - (((int)dYp) / CELL_HEIGHT)][((int)(dXp)) / CELL_WIDTH] != CT_EMPTY) {
+//            // TODO: if (aMap[CALCY - (iYp >> 6)][iXp >> 6] == 0)
+//            // Player lands into non-emptied cell, return to the previous position
+//            dXp = dOldXp;
+//            dYp = dOldYp;
+//        } // else { The move is valid }
+//#endif
+//    }
+//
+//    RayCaster((int)dXp, (int)dYp, iAngle);    // Perform ray casting after the movement to update the framebuffer
+//    glutPostRedisplay();                      // Asks GLUT to redraw the screen
+//}
+
 void KeyboardFunc(unsigned char key, int x, int y)
 {
-    bool   bTranslate = false;   // Is the player translated?
-    bool   bChangeRes = false;   // Is resolution changed?
-    bool   bChangeFOV = false;   // Is FOV changed?
-    double dDeltaX, dDeltaY;     // Delta translation 
-    double dOldAngle;            // Player's view direction in degrees (before recalculating ray casting parameters)
+    // Track keys that are currently pressed down
+    unsigned char lowerKey = tolower(key);
+    keys[lowerKey] = true;
 
-    switch (key) {
-        //|_________________________________________________
-        //| 
-        //| WASD for player's movement
-        //|_________________________________________________
+    // Handle single-press actions (Resolution, FOV, Textures)
+    bool bChangeRes = false;
+    bool bChangeFOV = false;
+    double dOldAngle;
 
-    case 'a':               // Left turn
-    case 'A':
-        iAngle += ANGLETURN;
-        if (iAngle >= ANGLE360)
-            iAngle = iAngle - ANGLE360;
-        break;
-    case 'd':               // Right turn
-    case 'D':
-        iAngle -= ANGLETURN;
-        if (iAngle < ANGLE0)
-            iAngle = ANGLE360 + iAngle;
-        break;
-    case 'w':               // Forward translation
-    case 'W':
-        // Computes the delta translation
-        dDeltaX = FORWARD_TRAN * aCos[iAngle];
-        dDeltaY = FORWARD_TRAN * aSin[iAngle];
-        bTranslate = true;
-        break;
-    case 's':               // Backward translation
-    case 'S':
-        // Computes the delta translation
-        dDeltaX = -FORWARD_TRAN * aCos[iAngle];
-        dDeltaY = -FORWARD_TRAN * aSin[iAngle];
-        bTranslate = true;
-        break;
-
-        //|_________________________________________________
-        //| 
-        //| Texture mapping
-        //|_________________________________________________
-    case 't':
-    case 'T':
-        bDoTexture = !bDoTexture;
-        break;
-
-        //|_________________________________________________
-        //| 
-        //| Resolution and FOV changes
-        //|_________________________________________________
-    case '+':               // Increases resolution
-    case '=':
-        iScrIndex++;
-        if (iScrIndex == SRES_NB) {
-            iScrIndex = 0;
-        }
-        bChangeRes = true;
-        break;
-    case '-':               // Decreases resolution
-    case '_':
-        iScrIndex--;
-        if (iScrIndex < 0) {
-            iScrIndex = SRES_NB - 1;
-        }
-        bChangeRes = true;
-        break;
-    case ']':               // Increases FOV
-    case '}':
-        iFovIndex++;
-        if (iFovIndex == PFOV_NB) {
-            iFovIndex = 0;
-        }
-        bChangeFOV = true;
-        break;
-    case '[':               // Decreases FOV
-    case '{':
-        iFovIndex--;
-        if (iFovIndex < 0) {
-            iFovIndex = PFOV_NB - 1;
-        }
-        bChangeFOV = true;
-        break;
-
-        // Otherwise, does nothing
-    default:
-        return;
+    switch (lowerKey) {
+    case 't': bDoTexture = !bDoTexture; break;
+    case '+': case '=': iScrIndex = (iScrIndex + 1) % SRES_NB; bChangeRes = true; break;
+    case '-': case '_': iScrIndex = (iScrIndex - 1 < 0) ? SRES_NB - 1 : iScrIndex - 1; bChangeRes = true; break;
+    case ']': case '}': iFovIndex = (iFovIndex + 1) % PFOV_NB; bChangeFOV = true; break;
+    case '[': case '{': iFovIndex = (iFovIndex - 1 < 0) ? PFOV_NB - 1 : iFovIndex - 1; bChangeFOV = true; break;
     }
 
     if (bChangeRes || bChangeFOV) {
-        //|_________________________________________________
-        //| 
-        //| Recalculates ray casting parameters if resolution or FOV is changed
-        //|_________________________________________________
-        dOldAngle = iAngle * DEG_PER_RAY;               // Maps old ray ID to degrees
+        dOldAngle = iAngle * DEG_PER_RAY;
         CalcRCParams(aFov[iFovIndex], aScrSize[iScrIndex][0], aScrSize[iScrIndex][1], aSliverScale[iScrIndex]);
-        iAngle = (int)(dOldAngle / DEG_PER_RAY);     // Maps degrees to new ray ID
+        iAngle = (int)(dOldAngle / DEG_PER_RAY);
 
         if (bChangeRes) {
-            // Destroys and reallocates framebuffer
             SetFrameBuffer(aScrSize[iScrIndex][0], aScrSize[iScrIndex][1]);
-
-            // Set window size to match the new resolution
             glutReshapeWindow(aScrSize[iScrIndex][0], aScrSize[iScrIndex][1]);
-
-            printf("Screen resolutions are %d x %d\n", aScrSize[iScrIndex][0], aScrSize[iScrIndex][1]);
-        }
-        else { // implied bChangeFOV
-            printf("Player's FOV is %d\n", aFov[iFovIndex]);
         }
     }
+}
 
-    if (bTranslate) {
-#ifdef USE_ADVANCED_PLAYER_TRANSLATION
-        //|_________________________________________________
-        //| 
-        //| Advanced movement mechanics: Player can slide along walls
-        //|_________________________________________________
-
-        int iOldXp, iOldYp;       // The player's old position
-        int iCp;                  // The player's current position (X or Y)
-        int iCell;                // The next cell wrt player before translation (X or Y)
-
-        // Player's position before translation
-        iOldXp = (int)dXp;
-        iOldYp = (int)dYp;
-
-        if (dDeltaX > 0) {
-            //|_________________________________________________
-            //| 
-            //| Move right
-            //|_________________________________________________
-
-            iCell = (iOldXp / CELL_WIDTH) + 1;      // Cell on the right of player before translation
-            // TODO: (iOldXp >> 6) + 1
-            dXp += dDeltaX;                      // Player's position after translation      
-            if (aMap[CALCY - (iOldYp / CELL_HEIGHT)][iCell] != CT_EMPTY) {
-                // There is a wall (non-emptied cell) on the right
-                // Make sure the player is within the safe distance from the wall after the translation
-
-                iCp = (int)dXp;                       // Position after the transation
-                if ((iCp / CELL_WIDTH == iCell) ||
-                    (iCp % CELL_WIDTH >= CELL_WIDTH - SAFE_DIST_FROM_WALL)) {
-                    // TODO: iCp >> 6
-                    // TODO: iCp & CELLW_MOD
-                    // Player moves into non-emptied cell on the right, or
-                    // Player crosses the safe distance from the wall
-                    // Moves player to the safe distance
-                    dXp = (iCell * CELL_WIDTH) - 1 - SAFE_DIST_FROM_WALL;
-                } // else { The player is still within the safe distance after transation, so it is safe to move }
-            } // else { There is an empty cell on the right, so it is safe to move }      
-        }
-        else
-            if (dDeltaX < 0) {
-                //|_________________________________________________
-                //| 
-                //| Move left
-                //|_________________________________________________
-
-                iCell = (iOldXp / CELL_WIDTH) - 1;      // Cell on the left of player before translation
-                // TODO: (iOldXp >> 6) - 1
-                dXp += dDeltaX;                      // Player's position after translation      
-                if (aMap[CALCY - (iOldYp / CELL_HEIGHT)][iCell] != CT_EMPTY) {
-                    // There is a wall (non-emptied cell) on the left
-                    // Make sure the player is within the safe distance from the wall after the translation
-
-                    iCp = (int)dXp;                       // Position after the transation
-                    if ((iCp / CELL_WIDTH == iCell) ||
-                        (iCp % CELL_WIDTH < SAFE_DIST_FROM_WALL)) {
-                        // TODO: iCp >> 6
-                        // TODO: iCp & CELLW_MOD
-                        // Player moves into non-emptied cell on the left, or
-                        // Player crosses the safe distance from the wall
-                        // Moves player to the safe distance
-                        dXp = ((iCell + 1) * CELL_WIDTH) + SAFE_DIST_FROM_WALL;
-                    } // else { The player is still within the safe distance after transation, so it is safe to move }
-                } // else { There is an empty cell on the left, so it is safe to move }      
-            }
-
-        if (dDeltaY > 0) {
-            //|_________________________________________________
-            //| 
-            //| Move up
-            //|_________________________________________________
-
-            iCell = (iOldYp / CELL_HEIGHT) + 1;     // Cell above player before translation
-            // TODO: (iOldYp >> 6) + 1
-            dYp += dDeltaY;                      // Player's position after translation      
-            if (aMap[CALCY - iCell][iOldXp / CELL_WIDTH] != CT_EMPTY) {
-                // There is a wall (non-emptied cell) above
-                // Make sure the player is within the safe distance from the wall after the translation
-
-                iCp = (int)dYp;                       // Position after the transation
-                if ((iCp / CELL_HEIGHT == iCell) ||
-                    (iCp % CELL_HEIGHT >= CELL_HEIGHT - SAFE_DIST_FROM_WALL)) {
-                    // TODO: iCp >> 6
-                    // TODO: iCp & CELLW_MOD
-                    // Player moves into non-emptied cell above, or
-                    // Player crosses the safe distance from the wall
-                    // Moves player to the safe distance
-                    dYp = (iCell * CELL_HEIGHT) - 1 - SAFE_DIST_FROM_WALL;
-                } // else { The player is still within the safe distance after transation, so it is safe to move }
-            } // else { There is an empty cell above, so it is safe to move }      
-        }
-        else
-            if (dDeltaY < 0) {
-                //|_________________________________________________
-                //| 
-                //| Move down
-                //|_________________________________________________
-
-                iCell = (iOldYp / CELL_HEIGHT) - 1;     // Cell below player before translation
-                // TODO: (iOldYp >> 6) - 1
-                dYp += dDeltaY;                      // Player's position after translation      
-                if (aMap[CALCY - iCell][iOldXp / CELL_WIDTH] != CT_EMPTY) {
-                    // There is a wall (non-emptied cell) below
-                    // Make sure the player is within the safe distance from the wall after the translation
-
-                    iCp = (int)dYp;                       // Position after the transation
-                    if ((iCp / CELL_HEIGHT == iCell) ||
-                        (iCp % CELL_HEIGHT < SAFE_DIST_FROM_WALL)) {
-                        // TODO: iCp >> 6
-                        // TODO: iCp & CELLW_MOD
-                        // Player moves into non-emptied cell below, or
-                        // Player crosses the safe distance from the wall
-                        // Moves player to the safe distance
-                        dYp = ((iCell + 1) * CELL_HEIGHT) + SAFE_DIST_FROM_WALL;
-                    } // else { The player is still within the safe distance after transation, so it is safe to move }
-                } // else { There is an empty cell below, so it is safe to move }      
-            }
-#else
-        //|_________________________________________________
-        //| 
-        //| Simple movement mechanics: No sliding along walls
-        //|_________________________________________________
-
-        double dOldXp, dOldYp;       // The player's old position
-
-        // Player's position before translation
-        dOldXp = dXp;
-        dOldYp = dYp;
-
-        // Computes the new position
-        dXp += dDeltaX;
-        dYp += dDeltaY;
-
-        if (aMap[CALCY - (((int)dYp) / CELL_HEIGHT)][((int)(dXp)) / CELL_WIDTH] != CT_EMPTY) {
-            // TODO: if (aMap[CALCY - (iYp >> 6)][iXp >> 6] == 0)
-            // Player lands into non-emptied cell, return to the previous position
-            dXp = dOldXp;
-            dYp = dOldYp;
-        } // else { The move is valid }
-#endif
-    }
-
-    RayCaster((int)dXp, (int)dYp, iAngle);    // Perform ray casting after the movement to update the framebuffer
-    glutPostRedisplay();                      // Asks GLUT to redraw the screen
+// Triggers when you let go of a key
+void KeyboardUpFunc(unsigned char key, int x, int y)
+{
+    keys[tolower(key)] = false;
 }
 
 //|____________________________________________________________________
@@ -1582,6 +1623,76 @@ void ReshapeFunc(int w, int h)
 
 void TimerFunc(int value)
 {
+    // --- SMOOTH PLAYER MOVEMENT & TURNING ---
+    double moveSpeed = 6.0; // Smooth, continuous walking speed
+    int turnSpeed = (int)(6.0 / DEG_PER_RAY); // Smooth turning speed
+
+    if (keys['a']) { // Turn Left
+        iAngle += turnSpeed;
+        if (iAngle >= ANGLE360) iAngle -= ANGLE360;
+    }
+    if (keys['d']) { // Turn Right
+        iAngle -= turnSpeed;
+        if (iAngle < ANGLE0) iAngle += ANGLE360;
+    }
+
+    double dDeltaX = 0;
+    double dDeltaY = 0;
+
+    if (keys['w']) { // Walk Forward
+        dDeltaX = moveSpeed * aCos[iAngle];
+        dDeltaY = moveSpeed * aSin[iAngle];
+    }
+    if (keys['s']) { // Walk Backward
+        dDeltaX = -moveSpeed * aCos[iAngle];
+        dDeltaY = -moveSpeed * aSin[iAngle];
+    }
+
+    // Apply movement & wall collision sliding
+    if (dDeltaX != 0 || dDeltaY != 0) {
+        int iOldXp = (int)dXp;
+        int iOldYp = (int)dYp;
+        int iCell;
+
+        if (dDeltaX > 0) {
+            iCell = (iOldXp / CELL_WIDTH) + 1;
+            dXp += dDeltaX;
+            if (aMap[CALCY - (iOldYp / CELL_HEIGHT)][iCell] != CT_EMPTY) {
+                if ((int)dXp / CELL_WIDTH == iCell || (int)dXp % CELL_WIDTH >= CELL_WIDTH - SAFE_DIST_FROM_WALL) {
+                    dXp = (iCell * CELL_WIDTH) - 1 - SAFE_DIST_FROM_WALL;
+                }
+            }
+        }
+        else if (dDeltaX < 0) {
+            iCell = (iOldXp / CELL_WIDTH) - 1;
+            dXp += dDeltaX;
+            if (aMap[CALCY - (iOldYp / CELL_HEIGHT)][iCell] != CT_EMPTY) {
+                if ((int)dXp / CELL_WIDTH == iCell || (int)dXp % CELL_WIDTH < SAFE_DIST_FROM_WALL) {
+                    dXp = ((iCell + 1) * CELL_WIDTH) + SAFE_DIST_FROM_WALL;
+                }
+            }
+        }
+
+        if (dDeltaY > 0) {
+            iCell = (iOldYp / CELL_HEIGHT) + 1;
+            dYp += dDeltaY;
+            if (aMap[CALCY - iCell][iOldXp / CELL_WIDTH] != CT_EMPTY) {
+                if ((int)dYp / CELL_HEIGHT == iCell || (int)dYp % CELL_HEIGHT >= CELL_HEIGHT - SAFE_DIST_FROM_WALL) {
+                    dYp = (iCell * CELL_HEIGHT) - 1 - SAFE_DIST_FROM_WALL;
+                }
+            }
+        }
+        else if (dDeltaY < 0) {
+            iCell = (iOldYp / CELL_HEIGHT) - 1;
+            dYp += dDeltaY;
+            if (aMap[CALCY - iCell][iOldXp / CELL_WIDTH] != CT_EMPTY) {
+                if ((int)dYp / CELL_HEIGHT == iCell || (int)dYp % CELL_HEIGHT < SAFE_DIST_FROM_WALL) {
+                    dYp = ((iCell + 1) * CELL_HEIGHT) + SAFE_DIST_FROM_WALL;
+                }
+            }
+        }
+    }
+
     // Drain the sanity bar
     if (fInsanity > 0) {
         fInsanity -= 1.0f; // Amount to decrease every second
