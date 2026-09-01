@@ -1,7 +1,7 @@
 {
     "Version": "1.2",
     "Data": {
-        "Source": "c:\\users\\user\\documents\\github\\raycasting\\raycaster.cpp",
+        "Source": "d:\\backrooms\\raycasting\\raycaster.cpp",
         "ProvidedModule": "",
         "Includes": [
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\ucrt\\stdio.h",
@@ -30,8 +30,10 @@
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\ucrt\\corecrt_math.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\ucrt\\time.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\ucrt\\corecrt_wtime.h",
-            "c:\\users\\user\\documents\\github\\raycasting\\packages\\nupengl.core.0.1.0.1\\build\\native\\include\\gl\\glut.h",
-            "c:\\users\\user\\documents\\github\\raycasting\\packages\\nupengl.core.0.1.0.1\\build\\native\\include\\gl\\freeglut_std.h",
+            "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\ucrt\\ctype.h",
+            "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\ucrt\\corecrt_wctype.h",
+            "d:\\backrooms\\raycasting\\packages\\nupengl.core.0.1.0.1\\build\\native\\include\\gl\\glut.h",
+            "d:\\backrooms\\raycasting\\packages\\nupengl.core.0.1.0.1\\build\\native\\include\\gl\\freeglut_std.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\um\\windows.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\shared\\winapifamily.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\shared\\winpackagefamily.h",
@@ -46,8 +48,6 @@
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\shared\\driverspecs.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\shared\\sdv_driverspecs.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\um\\winnt.h",
-            "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\ucrt\\ctype.h",
-            "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\ucrt\\corecrt_wctype.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\shared\\kernelspecs.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\shared\\basetsd.h",
             "c:\\program files (x86)\\windows kits\\10\\include\\10.0.26100.0\\shared\\guiddef.h",
