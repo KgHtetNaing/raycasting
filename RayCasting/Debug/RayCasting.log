@@ -1,3 +1,2 @@
 ﻿  RayCaster.cpp
-D:\Backrooms\raycasting\RayCaster.cpp(787,21): error C3861: 'DrawFilteredTexturedSliver': identifier not found
-D:\Backrooms\raycasting\RayCaster.cpp(821,21): error C3861: 'DrawFilteredTexturedSliver': identifier not found
+  RayCasting.vcxproj -> C:\Users\User\Documents\GitHub\raycasting\Debug\RayCasting.exe

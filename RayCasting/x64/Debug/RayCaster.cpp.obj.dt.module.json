@@ -1,0 +1,14 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "RayCasting\\x64\\Debug\\RayCaster.obj",
+            "outputs": [
+                "RayCasting\\x64\\Debug\\RayCaster.cpp.obj.dt.module.json",
+                "RayCasting\\x64\\Debug\\RayCaster.cpp.obj.dt.d.json"
+            ],
+            "requires": []
+        }
+    ]
+}
