@@ -277,6 +277,7 @@ const PointLight g_Lights[] = {
 const int g_NumLights = sizeof(g_Lights) / sizeof(g_Lights[0]);
 
 bool g_started = false;
+bool g_won = false;
 
 //|___________________
 //|
@@ -945,9 +946,19 @@ void DisplayFunc()
         int cx = (screenW / 2) - 150;
         int cy = (screenH / 2);
 
-        RenderStringUI(cx - 50, cy + 50, "Welcome to the Backrooms,Don't lose your sanity!");
-        RenderStringUI(cx + 35, cy + 20, "and DON'T GET CAUGHT!");
-        RenderStringUI(cx + 50, cy - 20, "Press ENTER to start.");
+        if (g_won) {
+            // Victory Screen
+            glColor3f(0.0f, 1.0f, 0.0f); // Bright green
+            RenderStringUI(cx + 80, cy + 30, "YOU ESCAPED!");
+            glColor3f(1.0f, 1.0f, 1.0f);
+            RenderStringUI(cx + 30, cy - 20, "Press ENTER to play again.");
+        }
+        else {
+            // Normal Start Screen
+            RenderStringUI(cx - 50, cy + 50, "Welcome to the Backrooms, Don't lose your sanity!");
+            RenderStringUI(cx + 35, cy + 20, "and DON'T GET CAUGHT!");
+            RenderStringUI(cx + 50, cy - 20, "Press ENTER to start.");
+        }
 
 #ifdef USE_DOUBLE_BUFFERING
         glutSwapBuffers();
@@ -977,6 +988,7 @@ void KeyboardFunc(unsigned char key, int x, int y)
     if (!g_started) {
         if (key == 13 || key == '\r' || key == '\n') {
             g_started = true;
+            g_won = false; // Reset win state on restart
             RayCaster((int)dXp, (int)dYp, iAngle);
             glutPostRedisplay();
         }
@@ -1165,6 +1177,33 @@ void TimerFunc(int value)
         int pGridX = (int)(dXp / CELL_WIDTH);
         int pGridY = CALCY - (int)(dYp / CELL_HEIGHT);
 
+        // Check if the current tile or adjacent neighbor is the exit (2)
+        int neighbors[5][2] = { {0,0}, {1,0}, {-1,0}, {0,1}, {0,-1} };
+        for (int i = 0; i < 5; i++) {
+            int checkX = pGridX + neighbors[i][0];
+            int checkY = pGridY + neighbors[i][1];
+
+            if (checkX >= 0 && checkX < CELLX && checkY >= 0 && checkY < CELLY) {
+                if (aMap[checkY][checkX] == 2) {
+                    // Calculate distance to center of exit cell
+                    double exitCenterX = (checkX * CELL_WIDTH) + 32.0;
+                    double exitCenterY = ((CALCY - checkY) * CELL_HEIGHT) + 32.0;
+                    double dist = sqrt((exitCenterX - dXp) * (exitCenterX - dXp) +
+                        (exitCenterY - dYp) * (exitCenterY - dYp));
+
+                    if (dist < 48.0) { // Close enough to the exit door
+                        printf("YOU ESCAPED!\n");
+                        ResetGame();
+                        memset(keys, false, sizeof(keys));
+                        g_started = false;
+                        g_won = true;
+                        glutPostRedisplay();
+                        glutTimerFunc(50, TimerFunc, 0);
+                        return;
+                    }
+                }
+            }
+        }
         int mGridX = (int)(stalker.x / CELL_WIDTH);
         int mGridY = CALCY - (int)(stalker.y / CELL_HEIGHT);
 
