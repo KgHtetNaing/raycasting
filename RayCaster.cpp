@@ -189,6 +189,7 @@ int SCRX_1;               // Screen dimension - 1
 int SCRY_1;
 int SCR_CENTERY;          // Y coordinate of the screen center 
 double DEG_PER_RAY;       // Angle between two adjacent rays (degrees)
+int g_damageFlashFrames = 0; // Number of frames to keep flashing
 
 bool keys[256] = { false };
 
@@ -214,11 +215,6 @@ double* aRectify = NULL;
 GLubyte* pFrameBuffer = NULL;
 double* ZBuffer = NULL;
 
-//struct Sprite {
-//    double x, y;
-//    bool active;
-//};
-
 const int NUM_ALMOND_WATER = 3;
 
 struct Sprite {
@@ -228,8 +224,6 @@ struct Sprite {
 
 // Array of 3 Almond Water bottles
 Sprite almondWaters[NUM_ALMOND_WATER];
-
-Sprite almondWater = { (6 * CELL_WIDTH) + 32.0, (10 * CELL_HEIGHT) + 32.0, true };
 
 enum MonsterState { LURK, STALK, CHASE, VANISH };
 
@@ -256,7 +250,7 @@ unsigned char* almondwater_imgdata = NULL;
 unsigned int aw_w = 0;
 unsigned int aw_h = 0;
 
-// --- ADD THESE FOR THE MONSTER ---
+// Monster textures
 unsigned char* monster_imgdata = NULL;
 unsigned int monster_w = 0;
 unsigned int monster_h = 0;
@@ -289,6 +283,7 @@ bool g_started = false;
 //| Function Prototypes
 //|___________________
 
+void ResetGame();
 void InitProgram();
 void CalcRCParams(const int iFov, const int iScrX, const int iScrY, const int iSliverScale);
 void SetFrameBuffer(const int iScrX, const int iScrY);
@@ -355,23 +350,26 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void InitProgram()
-{
-    unsigned int w, h;
+//|____________________________________________________________________
+//|
+//| Function: ResetGame
+//| Resets the map, player position, monster, pickups, and sanity bar.
+//|____________________________________________________________________
 
-    srand((unsigned int)time(NULL));
+void ResetGame()
+{
     int selectedMap = rand() % NUM_MAPS;
     memcpy(aMap, aMaps[selectedMap], sizeof(aMap));
     printf("Loaded Map Variation #%d\n", selectedMap + 1);
 
-    CalcRCParams(aFov[iFovIndex], aScrSize[iScrIndex][0], aScrSize[iScrIndex][1], aSliverScale[iScrIndex]);
+    fInsanity = fMaxInsanity;
 
     if (selectedMap == 0) {
         dXp = (2 * CELL_WIDTH) + 32;
         dYp = (4 * CELL_HEIGHT) + 32;
         stalker.x = (14 * CELL_WIDTH) + 32.0;
         stalker.y = (4 * CELL_HEIGHT) + 32.0;
-        // 3 Almond Water locations for Map 1
+
         almondWaters[0] = { (6 * CELL_WIDTH) + 32.0,  (10 * CELL_HEIGHT) + 32.0, true };
         almondWaters[1] = { (13 * CELL_WIDTH) + 32.0, (1 * CELL_HEIGHT) + 32.0, true };
         almondWaters[2] = { (1 * CELL_WIDTH) + 32.0,  (14 * CELL_HEIGHT) + 32.0, true };
@@ -382,7 +380,6 @@ void InitProgram()
         stalker.x = (10 * CELL_WIDTH) + 32.0;
         stalker.y = (7 * CELL_HEIGHT) + 32.0;
 
-        // 3 Almond Water locations for Map 2
         almondWaters[0] = { (4 * CELL_WIDTH) + 32.0,  (3 * CELL_HEIGHT) + 32.0, true };
         almondWaters[1] = { (11 * CELL_WIDTH) + 32.0, (12 * CELL_HEIGHT) + 32.0, true };
         almondWaters[2] = { (2 * CELL_WIDTH) + 32.0,  (14 * CELL_HEIGHT) + 32.0, true };
@@ -393,13 +390,22 @@ void InitProgram()
         stalker.x = (10 * CELL_WIDTH) + 32.0;
         stalker.y = (2 * CELL_HEIGHT) + 32.0;
 
-        // 3 Almond Water locations for Map 3
         almondWaters[0] = { (8 * CELL_WIDTH) + 32.0,  (7 * CELL_HEIGHT) + 32.0, true };
         almondWaters[1] = { (3 * CELL_WIDTH) + 32.0,  (1 * CELL_HEIGHT) + 32.0, true };
         almondWaters[2] = { (13 * CELL_WIDTH) + 32.0, (12 * CELL_HEIGHT) + 32.0, true };
     }
+    stalker.active = true;
     iAngle = ANGLE90;
+    g_damageFlashFrames = 0;
+}
 
+void InitProgram()
+{
+    unsigned int w, h;
+
+    srand((unsigned int)time(NULL));
+
+    CalcRCParams(aFov[iFovIndex], aScrSize[iScrIndex][0], aScrSize[iScrIndex][1], aSliverScale[iScrIndex]);
     SetFrameBuffer(aScrSize[iScrIndex][0], aScrSize[iScrIndex][1]);
 
     LoadPPM(WALLTEXTURES_IMGFILE, &w, &h, &walltex_imgdata, 1);
@@ -409,6 +415,8 @@ void InitProgram()
 
     LoadPPM("almondwater.ppm", &aw_w, &aw_h, &almondwater_imgdata, 1);
     LoadPPM("captClark.ppm", &monster_w, &monster_h, &monster_imgdata, 1);
+
+    ResetGame();
 }
 
 void CalcRCParams(const int iFov, const int iScrX, const int iScrY, const int iSliverScale)
@@ -622,7 +630,6 @@ void DrawMonster(Monster& m)
     int top = SCR_CENTERY + (mSize / 2);
     int bottom = SCR_CENTERY - (mSize / 2);
 
-    // Optional: offset it slightly so it looks grounded on the floor
     int floorOffset = mSize / 3;
     top -= floorOffset;
     bottom -= floorOffset;
@@ -630,7 +637,6 @@ void DrawMonster(Monster& m)
     if (bottom < 0) bottom = 0;
     if (top > SCRY_1) top = SCRY_1;
 
-    // Width of the monster sprite
     int startX = centerCol - (mSize / 3);
     int endX = centerCol + (mSize / 3);
 
@@ -641,12 +647,8 @@ void DrawMonster(Monster& m)
         if (x >= 0 && x < SCREENX) {
             if (dist < ZBuffer[x]) {
                 double light = CalcLightIntensity(m.x, m.y);
-
-                // Calculate which column of the texture image to draw
                 int texCol = (int)(((float)(x - startX) / spriteWidth) * monster_w);
                 if (texCol >= (int)monster_w) texCol = monster_w - 1;
-
-                // Draw the textured sliver instead of the solid red block!
                 DrawTexturedSpriteSliver(x, top, bottom, texCol, monster_imgdata, monster_w, monster_h, light);
             }
         }
@@ -831,6 +833,7 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
     }
     DrawMonster(stalker);
 
+    // --- POST-PROCESSING: Hallucination Effect ---
     if (fInsanity < 40.0f) {
         for (int y = 0; y < SCREENY; y++) {
             for (int x = 0; x < SCREENX; x++) {
@@ -843,6 +846,19 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
                     pFrameBuffer[index + 1] /= 2;
                     pFrameBuffer[index + 2] /= 2;
                 }
+            }
+        }
+    }
+
+    // --- POST-PROCESSING: Damage Blink Effect ---
+    if (g_damageFlashFrames > 0) {
+        for (int y = 0; y < SCREENY; y++) {
+            for (int x = 0; x < SCREENX; x++) {
+                int index = ((y * SCREENX) + x) * 3;
+                int red = pFrameBuffer[index] + 160;
+                pFrameBuffer[index] = (red > 255) ? 255 : red;
+                pFrameBuffer[index + 1] /= 3;
+                pFrameBuffer[index + 2] /= 3;
             }
         }
     }
@@ -929,7 +945,8 @@ void DisplayFunc()
         int cx = (screenW / 2) - 150;
         int cy = (screenH / 2);
 
-        RenderStringUI(cx+ 30, cy + 30, "Welcome to the Backrooms");
+        RenderStringUI(cx - 50, cy + 50, "Welcome to the Backrooms,Don't lose your sanity!");
+        RenderStringUI(cx + 35, cy + 20, "and DON'T GET CAUGHT!");
         RenderStringUI(cx + 50, cy - 20, "Press ENTER to start.");
 
 #ifdef USE_DOUBLE_BUFFERING
@@ -1119,6 +1136,16 @@ void TimerFunc(int value)
         fInsanity -= 0.02083f;
     }
 
+    if (fInsanity <= 0.0f) {
+        printf("You lost your sanity! Returning to title screen...\n");
+        ResetGame();
+        memset(keys, false, sizeof(keys));
+        g_started = false;
+        glutPostRedisplay();
+        glutTimerFunc(50, TimerFunc, 0);
+        return;
+    }
+
     for (int i = 0; i < NUM_ALMOND_WATER; i++) {
         if (almondWaters[i].active) {
             double dx = almondWaters[i].x - dXp;
@@ -1126,8 +1153,8 @@ void TimerFunc(int value)
             double dist = sqrt(dx * dx + dy * dy);
 
             if (dist < CELL_WIDTH / 2.0) {
-                almondWaters[i].active = false; // Make this specific bottle disappear
-                fInsanity += 30.0f;             // Heal sanity
+                almondWaters[i].active = false;
+                fInsanity += 30.0f;
                 if (fInsanity > fMaxInsanity) fInsanity = fMaxInsanity;
                 printf("Drank Almond Water! Sanity is now: %f\n", fInsanity);
             }
@@ -1238,10 +1265,23 @@ void TimerFunc(int value)
             stalker.y = ((CALCY - mRandGridY) * CELL_HEIGHT) + 32.0;
 
             fInsanity -= 25.0f;
-            if (fInsanity < 0.0f) fInsanity = 0.0f;
-
+            g_damageFlashFrames = 6;
             printf("CAUGHT! Warped to a random sector. Sanity damaged!\n");
+
+            if (fInsanity <= 0.0f) {
+                printf("You lost your sanity to the monster! Restarting...\n");
+                ResetGame();
+                memset(keys, false, sizeof(keys));
+                g_started = false;
+                glutPostRedisplay();
+                glutTimerFunc(50, TimerFunc, 0);
+                return;
+            }
         }
+    }
+
+    if (g_damageFlashFrames > 0) {
+        g_damageFlashFrames--;
     }
 
     RayCaster((int)dXp, (int)dYp, iAngle);
