@@ -214,10 +214,20 @@ double* aRectify = NULL;
 GLubyte* pFrameBuffer = NULL;
 double* ZBuffer = NULL;
 
+//struct Sprite {
+//    double x, y;
+//    bool active;
+//};
+
+const int NUM_ALMOND_WATER = 3;
+
 struct Sprite {
     double x, y;
     bool active;
 };
+
+// Array of 3 Almond Water bottles
+Sprite almondWaters[NUM_ALMOND_WATER];
 
 Sprite almondWater = { (6 * CELL_WIDTH) + 32.0, (10 * CELL_HEIGHT) + 32.0, true };
 
@@ -245,6 +255,11 @@ unsigned char* walltex_imgdata = NULL;
 unsigned char* almondwater_imgdata = NULL;
 unsigned int aw_w = 0;
 unsigned int aw_h = 0;
+
+// --- ADD THESE FOR THE MONSTER ---
+unsigned char* monster_imgdata = NULL;
+unsigned int monster_w = 0;
+unsigned int monster_h = 0;
 
 struct PointLight {
     double x, y;
@@ -356,18 +371,32 @@ void InitProgram()
         dYp = (4 * CELL_HEIGHT) + 32;
         stalker.x = (14 * CELL_WIDTH) + 32.0;
         stalker.y = (4 * CELL_HEIGHT) + 32.0;
+        // 3 Almond Water locations for Map 1
+        almondWaters[0] = { (6 * CELL_WIDTH) + 32.0,  (10 * CELL_HEIGHT) + 32.0, true };
+        almondWaters[1] = { (13 * CELL_WIDTH) + 32.0, (1 * CELL_HEIGHT) + 32.0, true };
+        almondWaters[2] = { (1 * CELL_WIDTH) + 32.0,  (14 * CELL_HEIGHT) + 32.0, true };
     }
     else if (selectedMap == 1) {
         dXp = (14 * CELL_WIDTH) + 32;
         dYp = (1 * CELL_HEIGHT) + 32;
         stalker.x = (10 * CELL_WIDTH) + 32.0;
         stalker.y = (7 * CELL_HEIGHT) + 32.0;
+
+        // 3 Almond Water locations for Map 2
+        almondWaters[0] = { (4 * CELL_WIDTH) + 32.0,  (3 * CELL_HEIGHT) + 32.0, true };
+        almondWaters[1] = { (11 * CELL_WIDTH) + 32.0, (12 * CELL_HEIGHT) + 32.0, true };
+        almondWaters[2] = { (2 * CELL_WIDTH) + 32.0,  (14 * CELL_HEIGHT) + 32.0, true };
     }
     else {
         dXp = (6 * CELL_WIDTH) + 32;
         dYp = (12 * CELL_HEIGHT) + 32;
         stalker.x = (10 * CELL_WIDTH) + 32.0;
         stalker.y = (2 * CELL_HEIGHT) + 32.0;
+
+        // 3 Almond Water locations for Map 3
+        almondWaters[0] = { (8 * CELL_WIDTH) + 32.0,  (7 * CELL_HEIGHT) + 32.0, true };
+        almondWaters[1] = { (3 * CELL_WIDTH) + 32.0,  (1 * CELL_HEIGHT) + 32.0, true };
+        almondWaters[2] = { (13 * CELL_WIDTH) + 32.0, (12 * CELL_HEIGHT) + 32.0, true };
     }
     iAngle = ANGLE90;
 
@@ -379,6 +408,7 @@ void InitProgram()
     }
 
     LoadPPM("almondwater.ppm", &aw_w, &aw_h, &almondwater_imgdata, 1);
+    LoadPPM("captClark.ppm", &monster_w, &monster_h, &monster_imgdata, 1);
 }
 
 void CalcRCParams(const int iFov, const int iScrX, const int iScrY, const int iSliverScale)
@@ -565,6 +595,8 @@ void DrawMonster(Monster& m)
 {
     if (!m.active) return;
 
+    if (monster_imgdata == NULL || monster_w == 0 || monster_h == 0) return;
+
     double dx = m.x - dXp;
     double dy = m.y - dYp;
     double dist = sqrt(dx * dx + dy * dy);
@@ -589,17 +621,33 @@ void DrawMonster(Monster& m)
 
     int top = SCR_CENTERY + (mSize / 2);
     int bottom = SCR_CENTERY - (mSize / 2);
+
+    // Optional: offset it slightly so it looks grounded on the floor
+    int floorOffset = mSize / 3;
+    top -= floorOffset;
+    bottom -= floorOffset;
+
     if (bottom < 0) bottom = 0;
     if (top > SCRY_1) top = SCRY_1;
 
+    // Width of the monster sprite
     int startX = centerCol - (mSize / 3);
     int endX = centerCol + (mSize / 3);
+
+    int spriteWidth = endX - startX;
+    if (spriteWidth <= 0) spriteWidth = 1;
 
     for (int x = startX; x <= endX; x++) {
         if (x >= 0 && x < SCREENX) {
             if (dist < ZBuffer[x]) {
                 double light = CalcLightIntensity(m.x, m.y);
-                DrawSolidSliver(x, top, bottom, 180, 0, 0, light);
+
+                // Calculate which column of the texture image to draw
+                int texCol = (int)(((float)(x - startX) / spriteWidth) * monster_w);
+                if (texCol >= (int)monster_w) texCol = monster_w - 1;
+
+                // Draw the textured sliver instead of the solid red block!
+                DrawTexturedSpriteSliver(x, top, bottom, texCol, monster_imgdata, monster_w, monster_h, light);
             }
         }
     }
@@ -778,7 +826,9 @@ void RayCaster(const int iXp, const int iYp, const int iAngle)
             iRay = ANGLE0;
     }
 
-    DrawSprite(almondWater);
+    for (int i = 0; i < NUM_ALMOND_WATER; i++) {
+        DrawSprite(almondWaters[i]);
+    }
     DrawMonster(stalker);
 
     if (fInsanity < 40.0f) {
@@ -1066,19 +1116,21 @@ void TimerFunc(int value)
     }
 
     if (fInsanity > 0) {
-        fInsanity -= 1.0f;
+        fInsanity -= 0.02083f;
     }
 
-    if (almondWater.active) {
-        double dx = almondWater.x - dXp;
-        double dy = almondWater.y - dYp;
-        double dist = sqrt(dx * dx + dy * dy);
+    for (int i = 0; i < NUM_ALMOND_WATER; i++) {
+        if (almondWaters[i].active) {
+            double dx = almondWaters[i].x - dXp;
+            double dy = almondWaters[i].y - dYp;
+            double dist = sqrt(dx * dx + dy * dy);
 
-        if (dist < CELL_WIDTH / 2.0) {
-            almondWater.active = false;
-            fInsanity += 30.0f;
-            if (fInsanity > fMaxInsanity) fInsanity = fMaxInsanity;
-            printf("Drank Almond Water! Sanity is now: %f\n", fInsanity);
+            if (dist < CELL_WIDTH / 2.0) {
+                almondWaters[i].active = false; // Make this specific bottle disappear
+                fInsanity += 30.0f;             // Heal sanity
+                if (fInsanity > fMaxInsanity) fInsanity = fMaxInsanity;
+                printf("Drank Almond Water! Sanity is now: %f\n", fInsanity);
+            }
         }
     }
 
@@ -1157,7 +1209,7 @@ void TimerFunc(int value)
         double dist = sqrt(dx * dx + dy * dy);
 
         if (dist > 0.5) {
-            double moveSpeed = 2.0;
+            double moveSpeed = 3.0;
             stalker.x += (dx / dist) * moveSpeed;
             stalker.y += (dy / dist) * moveSpeed;
         }
