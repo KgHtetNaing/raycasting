@@ -45,7 +45,9 @@
 #include <ctype.h>
 
 #include <GL/glut.h>
-
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 //|___________________
 //|
 //| Type Definitions
@@ -336,6 +338,17 @@ int main(int argc, char** argv)
 #endif  
     glutInitWindowSize(aScrSize[iScrIndex][0], aScrSize[iScrIndex][1]);
     glutCreateWindow("Guten Tag! Ray Caster");
+
+#if defined(_WIN32)
+    HWND hwnd = FindWindowA(NULL, "Guten Tag! Ray Caster");
+    if (hwnd) {
+        LONG style = GetWindowLong(hwnd, GWL_STYLE);
+        style &= ~WS_THICKFRAME;   // Disables user resizing by dragging borders
+        style &= ~WS_MAXIMIZEBOX;  // Disables the maximize button
+        SetWindowLong(hwnd, GWL_STYLE, style);
+        SetWindowPos(hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
+    }
+#endif
 
     InitProgram();
 
@@ -1005,8 +1018,8 @@ void KeyboardFunc(unsigned char key, int x, int y)
 
     switch (lowerKey) {
     case 't': bDoTexture = !bDoTexture; break;
-    case '+': case '=': iScrIndex = (iScrIndex + 1) % SRES_NB; bChangeRes = true; break;
-    case '-': case '_': iScrIndex = (iScrIndex - 1 < 0) ? SRES_NB - 1 : iScrIndex - 1; bChangeRes = true; break;
+    //case '+': case '=': iScrIndex = (iScrIndex + 1) % SRES_NB; bChangeRes = true; break;
+    //case '-': case '_': iScrIndex = (iScrIndex - 1 < 0) ? SRES_NB - 1 : iScrIndex - 1; bChangeRes = true; break;
     case ']': case '}': iFovIndex = (iFovIndex + 1) % PFOV_NB; bChangeFOV = true; break;
     case '[': case '{': iFovIndex = (iFovIndex - 1 < 0) ? PFOV_NB - 1 : iFovIndex - 1; bChangeFOV = true; break;
     }
@@ -1064,6 +1077,14 @@ void LoadPPM(const char* fname, unsigned int* w, unsigned int* h, unsigned char*
 
 void ReshapeFunc(int w, int h)
 {
+    const int targetW = 1024;
+    const int targetH = 768;
+
+    if (w != targetW || h != targetH) {
+        glutReshapeWindow(targetW, targetH);
+    }
+    glViewport(0, 0, targetW, targetH);
+
 #ifdef SHOW_DEBUG_INFO
     printf("DEBUG: Current window dimensions are %d x %d\n", w, h);
 #endif

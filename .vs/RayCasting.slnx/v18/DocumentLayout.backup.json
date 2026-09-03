@@ -1,9 +1,9 @@
 {
   "Version": 1,
-  "WorkspaceRootPath": "C:\\Users\\User\\Documents\\GitHub\\raycasting\\",
+  "WorkspaceRootPath": "D:\\Backrooms\\raycasting\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{F61EC18D-2FE6-48FB-A421-E27E4C36C9E9}|RayCasting.vcxproj|C:\\Users\\User\\Documents\\GitHub\\raycasting\\RayCaster.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "AbsoluteMoniker": "D:0:0:{F61EC18D-2FE6-48FB-A421-E27E4C36C9E9}|RayCasting.vcxproj|D:\\Backrooms\\raycasting\\RayCaster.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{F61EC18D-2FE6-48FB-A421-E27E4C36C9E9}|RayCasting.vcxproj|solutionrelative:RayCaster.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     }
   ],
@@ -20,11 +20,11 @@
               "$type": "Document",
               "DocumentIndex": 0,
               "Title": "RayCaster.cpp",
-              "DocumentMoniker": "C:\\Users\\User\\Documents\\GitHub\\raycasting\\RayCaster.cpp",
+              "DocumentMoniker": "D:\\Backrooms\\raycasting\\RayCaster.cpp",
               "RelativeDocumentMoniker": "RayCaster.cpp",
-              "ToolTip": "C:\\Users\\User\\Documents\\GitHub\\raycasting\\RayCaster.cpp",
+              "ToolTip": "D:\\Backrooms\\raycasting\\RayCaster.cpp",
               "RelativeToolTip": "RayCaster.cpp",
-              "ViewState": "AgIAAHcAAAAAAAAAAAAAAIkAAAAmAAAAAAAAAA==",
+              "ViewState": "AgIAAHcAAAAAAAAAAAAAAIkAAAAqAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2026-08-28T05:40:35.993Z",
               "EditorCaption": ""
